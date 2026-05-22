@@ -187,25 +187,23 @@ export default function QuickRepliesPage() {
                           <button onClick={() => removeMessage(i)} className="text-red-400 hover:text-red-600"><X size={14} /></button>
                         )}
                       </div>
-                      <textarea
-                        className="input min-h-[100px] resize-none text-sm"
-                        placeholder="Type the default reply message..."
-                        value={m.body}
-                        onChange={(e) => updateMessage(i, 'body', e.target.value)}
-                      />
-                      {/* Variations */}
+                      {/* Single textarea — one variation per line, system picks randomly */}
                       <div>
                         <label className="block text-xs font-medium text-gray-500 mb-1">
-                          Reply Variations <span className="text-gray-400 font-normal">(optional — one per line, system picks randomly)</span>
+                          Reply <span className="text-gray-400 font-normal">(one variation per line — system picks one randomly each time)</span>
                         </label>
                         <textarea
-                          className="input min-h-[90px] resize-none text-sm"
+                          className="input min-h-[130px] resize-none text-sm"
                           placeholder={"Welcome to BlazingProjects! How can I help you today?\nWelcome to BlazingProjects! What can I assist you with?\nWelcome to BlazingProjects! How may I support you today?"}
-                          value={m.variations.join('\n')}
-                          onChange={(e) => updateMessage(i, 'variations', e.target.value.split('\n').map(v => v.trim()).filter(Boolean))}
+                          value={[m.body, ...m.variations].filter(Boolean).join('\n')}
+                          onChange={(e) => {
+                            const lines = e.target.value.split('\n')
+                            updateMessage(i, 'body', lines[0] ?? '')
+                            updateMessage(i, 'variations', lines.slice(1).filter(Boolean))
+                          }}
                         />
-                        {m.variations.length > 0 && (
-                          <p className="text-xs text-green-600 mt-1">✓ {m.variations.length + 1} variations (including default) — picked randomly each send</p>
+                        {(m.variations.length > 0 || m.body) && (
+                          <p className="text-xs text-green-600 mt-1">✓ {m.variations.length + 1} variation{m.variations.length > 0 ? 's' : ''} — picked randomly each send</p>
                         )}
                       </div>
                       <div className="flex items-center gap-2">
