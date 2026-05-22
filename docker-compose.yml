@@ -5,11 +5,11 @@ services:
     env_file: .env
     environment:
       - NODE_ENV=production
+    ports:
+      - "4000:4000"
     volumes:
       - wa-sessions:/app/wa-sessions
       - uploads:/app/apps/api/uploads
-    networks:
-      - wac
 
   dashboard:
     image: ghcr.io/starnetweb/starnetchat-dashboard:latest
@@ -17,26 +17,9 @@ services:
     env_file: .env
     environment:
       - NODE_ENV=production
-    networks:
-      - wac
-
-  nginx:
-    image: nginx:alpine
-    restart: always
     ports:
-      - "80:80"
-    volumes:
-      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
-    depends_on:
-      - api
-      - dashboard
-    networks:
-      - wac
+      - "3000:3000"
 
 volumes:
   wa-sessions:
   uploads:
-
-networks:
-  wac:
-    driver: bridge
