@@ -16,7 +16,7 @@ COPY packages/queue/package.json      ./packages/queue/
 COPY apps/api/package.json            ./apps/api/
 
 # Install all workspace dependencies
-RUN pnpm install --frozen-lockfile
+RUN pnpm install --no-frozen-lockfile
 
 # Copy source files
 COPY packages/ ./packages/

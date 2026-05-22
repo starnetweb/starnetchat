@@ -15,7 +15,7 @@ COPY packages/ai/package.json         ./packages/ai/
 COPY packages/queue/package.json      ./packages/queue/
 COPY apps/dashboard/package.json      ./apps/dashboard/
 
-RUN pnpm install --frozen-lockfile
+RUN pnpm install --no-frozen-lockfile
 
 # Copy source
 COPY packages/ ./packages/
@@ -24,6 +24,7 @@ COPY apps/dashboard/ ./apps/dashboard/
 WORKDIR /app/apps/dashboard
 
 # Build Next.js for production
+ENV NODE_OPTIONS="--max-old-space-size=4096"
 RUN npx next build
 
 # ── Runtime image (smaller) ───────────────────────────────────────────────────
@@ -39,7 +40,7 @@ COPY pnpm-lock.yaml ./
 COPY packages/db/package.json         ./packages/db/
 COPY apps/dashboard/package.json      ./apps/dashboard/
 
-RUN pnpm install --frozen-lockfile --prod
+RUN pnpm install --no-frozen-lockfile --prod
 
 COPY --from=builder /app/apps/dashboard/.next      ./apps/dashboard/.next
 COPY --from=builder /app/apps/dashboard/public     ./apps/dashboard/public
