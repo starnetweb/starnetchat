@@ -26,7 +26,7 @@ const emptyForm = () => ({
   name: '',
   keywords: '' as string,
   matchType: 'ANY',
-  messages: [{ body: '', variations: [], delaySeconds: 0, order: 0 }] as QRMessage[],
+  messages: [] as QRMessage[],
 })
 
 export default function QuickRepliesPage() {
@@ -178,6 +178,11 @@ export default function QuickRepliesPage() {
               {/* Messages */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-1.5"><MessageSquare size={14} /> Reply Messages</label>
+                {form.messages.length === 0 && (
+                  <button onClick={addMessage} className="btn-secondary text-sm flex items-center gap-2 mb-3">
+                    <Plus size={14} /> Add a message
+                  </button>
+                )}
                 <div className="space-y-3">
                   {form.messages.map((m, i) => (
                     <div key={i} className="border border-gray-100 rounded-xl p-4 space-y-3 bg-gray-50">
