@@ -1,0 +1,20 @@
+{
+  "name": "@wac/db",
+  "version": "0.0.1",
+  "main": "./src/index.ts",
+  "scripts": {
+    "db:migrate": "prisma migrate dev",
+    "db:push": "prisma db push",
+    "db:generate": "prisma generate",
+    "db:seed": "ts-node src/seed.ts"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.14.0",
+    "@types/bcryptjs": "^2.4.6",
+    "bcryptjs": "^2.4.3"
+  },
+  "devDependencies": {
+    "prisma": "^5.14.0",
+    "ts-node": "^10.9.2"
+  }
+}

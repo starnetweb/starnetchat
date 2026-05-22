@@ -1,0 +1,350 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [pgvector(map: "vector")]
+}
+
+// ─── Brands ───────────────────────────────────────────────────────────────────
+
+model Brand {
+  id                String   @id @default(cuid())
+  name              String
+  slug              String   @unique
+  logo              String?
+  // All brands share one WhatsApp number — routing is AI-detected
+  systemPrompt      String   @db.Text
+  // Keywords/product names the brand detector uses to identify this brand
+  keywords          String[]
+  language          String   @default("en")
+  isActive          Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  contacts          Contact[]
+  conversations     Conversation[]
+  knowledgeChunks   KnowledgeChunk[]
+  automationRules   AutomationRule[]
+  messageTemplates  MessageTemplate[]
+  escalationRules   EscalationRule[]
+  labelInstructions LabelInstruction[]
+  quickReplies        QuickReply[]
+  cannedResponses     CannedResponse[]
+  scheduledBroadcasts ScheduledBroadcast[]
+
+  @@map("brands")
+}
+
+// ─── WhatsApp Sessions ────────────────────────────────────────────────────────
+
+model WhatsappSession {
+  id        String        @id @default(cuid())
+  // sessionKey is 'main' for the single shared WhatsApp number
+  sessionKey String       @unique @default("main")
+  status    SessionStatus @default(DISCONNECTED)
+  qrCode    String?       @db.Text
+  // Global AI toggle — when false, AI is silenced system-wide; human CS handles everything
+  aiEnabled Boolean       @default(true)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  @@map("whatsapp_sessions")
+}
+
+enum SessionStatus {
+  DISCONNECTED
+  CONNECTING
+  QR_READY
+  CONNECTED
+}
+
+// ─── Contacts ─────────────────────────────────────────────────────────────────
+
+model Contact {
+  id            String   @id @default(cuid())
+  // brandId kept for FK compatibility; represents first/default brand interaction
+  brandId       String
+  whatsappJid   String   @unique
+  name          String?
+  phone         String   @unique
+  isBlocked     Boolean  @default(false)
+  tags          String[]
+  notes         String?  @db.Text
+  metadata      Json     @default("{}")
+  firstSeenAt   DateTime @default(now())
+  lastSeenAt    DateTime @default(now())
+
+  brand         Brand          @relation(fields: [brandId], references: [id])
+  conversations Conversation[]
+
+  @@map("contacts")
+}
+
+// ─── Conversations ────────────────────────────────────────────────────────────
+
+model Conversation {
+  id              String             @id @default(cuid())
+  brandId         String
+  contactId       String
+  status          ConversationStatus @default(OPEN)
+  brandConfirmed  Boolean            @default(false)
+  assignedTo      String?
+  notes           String?            @db.Text
+  openedAt        DateTime           @default(now())
+  closedAt        DateTime?
+  updatedAt       DateTime           @updatedAt
+
+  // WhatsApp Business labels applied to this chat (e.g. "Follow Up", "Project Delivered")
+  labels      String[]   @default([])
+
+  brand       Brand     @relation(fields: [brandId], references: [id])
+  contact     Contact   @relation(fields: [contactId], references: [id])
+  messages    Message[]
+  jobs        AutomationJob[]
+
+  @@map("conversations")
+}
+
+enum ConversationStatus {
+  OPEN
+  PENDING
+  RESOLVED
+  ESCALATED
+}
+
+// ─── Messages ─────────────────────────────────────────────────────────────────
+
+model Message {
+  id             String      @id @default(cuid())
+  conversationId String
+  direction      Direction
+  role           MessageRole
+  content        String      @db.Text
+  mediaUrl       String?
+  mediaType      String?
+  whatsappMsgId  String?     @unique
+  isRead         Boolean     @default(false)
+  sentAt         DateTime    @default(now())
+
+  conversation   Conversation @relation(fields: [conversationId], references: [id])
+
+  @@map("messages")
+}
+
+enum Direction {
+  INBOUND
+  OUTBOUND
+}
+
+enum MessageRole {
+  USER
+  ASSISTANT
+  SYSTEM
+}
+
+// ─── Knowledge Base (RAG) ─────────────────────────────────────────────────────
+
+model KnowledgeChunk {
+  id         String                      @id @default(cuid())
+  brandId    String
+  sourceFile String
+  chunkIndex Int
+  content    String                      @db.Text
+  embedding  Unsupported("vector(1536)")?
+  createdAt  DateTime                    @default(now())
+
+  brand      Brand @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  @@map("knowledge_chunks")
+}
+
+// ─── Automation Rules ─────────────────────────────────────────────────────────
+
+model AutomationRule {
+  id              String        @id @default(cuid())
+  brandId         String
+  name            String
+  triggerEvent    TriggerEvent
+  delayMinutes    Int           @default(0)
+  templateId      String
+  isActive        Boolean       @default(true)
+  conditions      Json          @default("{}")
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  brand           Brand           @relation(fields: [brandId], references: [id])
+  template        MessageTemplate @relation(fields: [templateId], references: [id])
+  jobs            AutomationJob[]
+
+  @@map("automation_rules")
+}
+
+enum TriggerEvent {
+  CONVERSATION_OPENED
+  NO_REPLY_FROM_CUSTOMER
+  NO_REPLY_FROM_AGENT
+  CONVERSATION_RESOLVED
+  CUSTOM_KEYWORD
+  LABEL_APPLIED
+}
+
+// ─── Message Templates ────────────────────────────────────────────────────────
+
+model MessageTemplate {
+  id        String   @id @default(cuid())
+  brandId   String
+  name      String
+  body      String   @db.Text
+  variables String[]
+  createdAt DateTime @default(now())
+
+  brand           Brand            @relation(fields: [brandId], references: [id])
+  automationRules AutomationRule[]
+
+  @@map("message_templates")
+}
+
+// ─── Automation Jobs ──────────────────────────────────────────────────────────
+
+model AutomationJob {
+  id             String    @id @default(cuid())
+  ruleId         String
+  conversationId String
+  bullJobId      String?
+  status         JobStatus @default(PENDING)
+  scheduledAt    DateTime
+  executedAt     DateTime?
+  error          String?
+
+  rule           AutomationRule @relation(fields: [ruleId], references: [id])
+  conversation   Conversation   @relation(fields: [conversationId], references: [id])
+
+  @@map("automation_jobs")
+}
+
+enum JobStatus {
+  PENDING
+  EXECUTED
+  CANCELLED
+  FAILED
+}
+
+// ─── Escalation Rules ─────────────────────────────────────────────────────────
+
+model EscalationRule {
+  id          String   @id @default(cuid())
+  brandId     String
+  keywords    String[]
+  notifyEmail String?
+  notifyPhone String?
+  isActive    Boolean  @default(true)
+
+  brand       Brand @relation(fields: [brandId], references: [id])
+
+  @@map("escalation_rules")
+}
+
+// ─── Quick Replies ────────────────────────────────────────────────────────────
+// Pattern-matched auto-responses that bypass the AI entirely
+
+model QuickReply {
+  id           String   @id @default(cuid())
+  brandId      String
+  name         String   // friendly name e.g. "Undergraduate Interest"
+  keywords     String[] // trigger keywords to match
+  matchType    String   @default("ANY") // "ANY" = at least one keyword, "ALL" = all keywords
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  brand        Brand              @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  messages     QuickReplyMessage[]
+
+  @@map("quick_replies")
+}
+
+model QuickReplyMessage {
+  id           String @id @default(cuid())
+  quickReplyId String
+  body         String @db.Text
+  delaySeconds Int    @default(0) // 0 = send immediately
+  order        Int    @default(0) // order of sending
+
+  quickReply   QuickReply @relation(fields: [quickReplyId], references: [id], onDelete: Cascade)
+
+  @@map("quick_reply_messages")
+}
+
+// ─── Label Instructions ───────────────────────────────────────────────────────
+// Per-brand instructions for how the AI should behave when a WhatsApp label is applied
+
+model LabelInstruction {
+  id          String   @id @default(cuid())
+  brandId     String
+  label       String   // e.g. "Follow Up", "Project Delivered"
+  instruction String   @db.Text  // What the AI should do/say for this label
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  brand       Brand @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  @@unique([brandId, label])
+  @@map("label_instructions")
+}
+
+// ─── Admin Users ──────────────────────────────────────────────────────────────
+
+model AdminUser {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String
+  password  String
+  role      AdminRole @default(AGENT)
+  brandIds  String[]
+  createdAt DateTime @default(now())
+
+  @@map("admin_users")
+}
+
+enum AdminRole {
+  SUPER_ADMIN
+  BRAND_ADMIN
+  AGENT
+}
+
+// ─── Canned Responses ─────────────────────────────────────────────────────────
+// Short reusable text snippets for human CS agents
+
+model CannedResponse {
+  id        String   @id @default(cuid())
+  brandId   String
+  title     String   // short label e.g. "Greeting", "Payment link"
+  body      String   @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  brand     Brand @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  @@map("canned_responses")
+}
+
+// ─── Scheduled Broadcasts ─────────────────────────────────────────────────────
+
+model ScheduledBroadcast {
+  id          String    @id @default(cuid())
+  brandId     String
+  contactIds  String[]
+  message     String    @db.Text
+  scheduledAt DateTime
+  sentAt      DateTime?
+  status      String    @default("PENDING") // PENDING | SENT | CANCELLED
+  createdAt   DateTime  @default(now())
+
+  brand       Brand @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  @@map("scheduled_broadcasts")
+}

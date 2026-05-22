@@ -1,0 +1,10 @@
+node_modules
+.next
+dist
+wa-sessions
+uploads
+*.log
+.env
+.env.local
+.git
+.gitignore

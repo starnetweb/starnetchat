@@ -1,0 +1,17 @@
+{
+  "name": "@wac/whatsapp",
+  "version": "0.0.1",
+  "main": "./src/index.ts",
+  "dependencies": {
+    "@hapi/boom": "^10.0.1",
+    "@wac/db": "workspace:*",
+    "@whiskeysockets/baileys": "^6.7.0",
+    "pino": "^9.2.0",
+    "qrcode": "^1.5.4"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/qrcode": "^1.5.5",
+    "typescript": "^5.4.0"
+  }
+}

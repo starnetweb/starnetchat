@@ -1,0 +1,14 @@
+{
+  "name": "@wac/queue",
+  "version": "0.0.1",
+  "main": "./src/index.ts",
+  "dependencies": {
+    "@wac/db": "workspace:*",
+    "bullmq": "^5.7.0",
+    "ioredis": "^5.4.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.4.0"
+  }
+}
