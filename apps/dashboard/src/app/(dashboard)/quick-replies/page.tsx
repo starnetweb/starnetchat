@@ -198,8 +198,11 @@ export default function QuickRepliesPage() {
                           value={[m.body, ...m.variations].filter(Boolean).join('\n')}
                           onChange={(e) => {
                             const lines = e.target.value.split('\n')
-                            updateMessage(i, 'body', lines[0] ?? '')
-                            updateMessage(i, 'variations', lines.slice(1).filter(Boolean))
+                            setForm((f) => {
+                              const msgs = [...f.messages]
+                              msgs[i] = { ...msgs[i], body: lines[0] ?? '', variations: lines.slice(1).filter(Boolean) }
+                              return { ...f, messages: msgs }
+                            })
                           }}
                         />
                         {(m.variations.length > 0 || m.body) && (
