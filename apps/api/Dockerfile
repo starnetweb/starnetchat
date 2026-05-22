@@ -1,13 +1,13 @@
 FROM node:20
 
-RUN npm install -g pnpm ts-node typescript tsconfig-paths
+RUN npm install -g pnpm tsx
 
 WORKDIR /app
 
 COPY . .
 RUN pnpm install --no-frozen-lockfile
 
-# Generate Prisma client (debian/bookworm has OpenSSL 3 — use correct binary target)
+# Generate Prisma client (Debian/bookworm — OpenSSL 3.x)
 RUN cd packages/db && npx prisma generate
 
 RUN mkdir -p /app/apps/api/uploads
@@ -16,4 +16,4 @@ WORKDIR /app/apps/api
 
 EXPOSE 4000
 
-CMD ["node", "-r", "tsconfig-paths/register", "-r", "ts-node/register/transpile-only", "src/index.ts"]
+CMD ["tsx", "src/index.ts"]
