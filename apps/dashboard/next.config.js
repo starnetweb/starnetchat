@@ -5,7 +5,7 @@ const nextConfig = {
   eslint: { ignoreDuringBuilds: true },
 
   async rewrites() {
-    const apiUrl = process.env.API_INTERNAL_URL || 'http://localhost:4000'
+    const apiUrl = process.env.API_INTERNAL_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000'
     return [
       {
         source: '/api/:path*',
