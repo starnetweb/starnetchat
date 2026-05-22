@@ -8,6 +8,7 @@ interface Brand { id: string; name: string }
 interface QRMessage {
   id?: string
   body: string
+  variations: string[]
   delaySeconds: number
   order: number
 }
@@ -25,7 +26,7 @@ const emptyForm = () => ({
   name: '',
   keywords: '' as string,
   matchType: 'ANY',
-  messages: [{ body: '', delaySeconds: 0, order: 0 }] as QRMessage[],
+  messages: [{ body: '', variations: [], delaySeconds: 0, order: 0 }] as QRMessage[],
 })
 
 export default function QuickRepliesPage() {
@@ -52,7 +53,7 @@ export default function QuickRepliesPage() {
       name: qr.name,
       keywords: qr.keywords.join(', '),
       matchType: qr.matchType,
-      messages: qr.messages.map((m) => ({ ...m })),
+      messages: qr.messages.map((m) => ({ ...m, variations: m.variations ?? [] })),
     })
     setShowForm(true)
     window.scrollTo({ top: 0, behavior: 'smooth' })
@@ -67,7 +68,7 @@ export default function QuickRepliesPage() {
   function addMessage() {
     setForm((f) => ({
       ...f,
-      messages: [...f.messages, { body: '', delaySeconds: 0, order: f.messages.length }],
+      messages: [...f.messages, { body: '', variations: [], delaySeconds: 0, order: f.messages.length }],
     }))
   }
 
@@ -188,10 +189,25 @@ export default function QuickRepliesPage() {
                       </div>
                       <textarea
                         className="input min-h-[100px] resize-none text-sm"
-                        placeholder="Type the reply message..."
+                        placeholder="Type the default reply message..."
                         value={m.body}
                         onChange={(e) => updateMessage(i, 'body', e.target.value)}
                       />
+                      {/* Variations */}
+                      <div>
+                        <label className="block text-xs font-medium text-gray-500 mb-1">
+                          Reply Variations <span className="text-gray-400 font-normal">(optional — one per line, system picks randomly)</span>
+                        </label>
+                        <textarea
+                          className="input min-h-[90px] resize-none text-sm"
+                          placeholder={"Welcome to BlazingProjects! How can I help you today?\nWelcome to BlazingProjects! What can I assist you with?\nWelcome to BlazingProjects! How may I support you today?"}
+                          value={m.variations.join('\n')}
+                          onChange={(e) => updateMessage(i, 'variations', e.target.value.split('\n').map(v => v.trim()).filter(Boolean))}
+                        />
+                        {m.variations.length > 0 && (
+                          <p className="text-xs text-green-600 mt-1">✓ {m.variations.length + 1} variations (including default) — picked randomly each send</p>
+                        )}
+                      </div>
                       <div className="flex items-center gap-2">
                         <Clock size={13} className="text-gray-400" />
                         <label className="text-xs text-gray-500">Send after</label>

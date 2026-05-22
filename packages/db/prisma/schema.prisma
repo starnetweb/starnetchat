@@ -269,11 +269,12 @@ model QuickReply {
 }
 
 model QuickReplyMessage {
-  id           String @id @default(cuid())
+  id           String   @id @default(cuid())
   quickReplyId String
-  body         String @db.Text
-  delaySeconds Int    @default(0) // 0 = send immediately
-  order        Int    @default(0) // order of sending
+  body         String   @db.Text
+  variations   String[] // alternative texts — system picks one at random each time
+  delaySeconds Int      @default(0) // 0 = send immediately
+  order        Int      @default(0) // order of sending
 
   quickReply   QuickReply @relation(fields: [quickReplyId], references: [id], onDelete: Cascade)
 

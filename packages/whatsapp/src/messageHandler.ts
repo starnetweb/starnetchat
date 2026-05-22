@@ -160,16 +160,21 @@ export async function handleIncomingMessage(sock: any, msg: proto.IWebMessageInf
       await sock.sendPresenceUpdate('composing', jid)
       await new Promise((r) => setTimeout(r, 800)) // brief typing flash
       await sock.sendPresenceUpdate('paused', jid)
-      await sock.sendMessage(jid, { text: qrMsg.body })
+      // Pick a random variation if available, otherwise use the default body
+      const pool = (qrMsg as any).variations?.length
+        ? [(qrMsg as any).body, ...(qrMsg as any).variations]
+        : [(qrMsg as any).body]
+      const text = pool[Math.floor(Math.random() * pool.length)]
+      await sock.sendMessage(jid, { text })
       await prisma.message.create({
         data: {
           conversationId: conversation.id,
           direction: 'OUTBOUND',
           role: 'ASSISTANT',
-          content: qrMsg.body,
+          content: text,
         },
       })
-      emit('message:new', { conversationId: conversation.id, direction: 'OUTBOUND', content: qrMsg.body })
+      emit('message:new', { conversationId: conversation.id, direction: 'OUTBOUND', content: text })
     }
     return
   }

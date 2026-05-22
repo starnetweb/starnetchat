@@ -27,8 +27,9 @@ quickReplyRouter.post('/:brandId', async (req, res) => {
       keywords,
       matchType: matchType || 'ANY',
       messages: {
-        create: messages.map((m: { body: string; delaySeconds?: number }, i: number) => ({
+        create: messages.map((m: { body: string; variations?: string[]; delaySeconds?: number }, i: number) => ({
           body: m.body,
+          variations: m.variations ?? [],
           delaySeconds: m.delaySeconds ?? 0,
           order: i,
         })),
@@ -55,8 +56,9 @@ quickReplyRouter.put('/:brandId/:id', async (req, res) => {
       isActive,
       messages: messages
         ? {
-            create: messages.map((m: { body: string; delaySeconds?: number }, i: number) => ({
+            create: messages.map((m: { body: string; variations?: string[]; delaySeconds?: number }, i: number) => ({
               body: m.body,
+              variations: m.variations ?? [],
               delaySeconds: m.delaySeconds ?? 0,
               order: i,
             })),
