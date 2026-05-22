@@ -86,7 +86,14 @@ export default function QuickRepliesPage() {
 
   async function save() {
     if (!form.name.trim() || !form.keywords.trim() || !selectedBrand) return
-    const msgs = form.messages.filter((m) => m.body.trim())
+    // Normalise: if body is empty but variations exist, promote first variation to body
+    const normalised = form.messages.map((m) => {
+      if (!m.body.trim() && m.variations.length > 0) {
+        return { ...m, body: m.variations[0], variations: m.variations.slice(1) }
+      }
+      return m
+    })
+    const msgs = normalised.filter((m) => m.body.trim())
     if (!msgs.length) return alert('Add at least one message')
     setSaving(true)
 
@@ -94,7 +101,7 @@ export default function QuickRepliesPage() {
       name: form.name.trim(),
       keywords: form.keywords.split(',').map((k) => k.trim()).filter(Boolean),
       matchType: form.matchType,
-      messages: msgs,
+      messages: normalised,
     }
 
     if (editingId) {
