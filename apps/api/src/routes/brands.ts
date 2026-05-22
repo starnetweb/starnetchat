@@ -37,9 +37,17 @@ brandRouter.post('/', async (req, res) => {
 })
 
 brandRouter.patch('/:id', async (req, res) => {
+  const { name, systemPrompt, keywords, isActive, language } = req.body
+  const data: any = {}
+  if (name !== undefined) data.name = name
+  if (systemPrompt !== undefined) data.systemPrompt = systemPrompt
+  if (keywords !== undefined) data.keywords = keywords
+  if (isActive !== undefined) data.isActive = isActive
+  if (language !== undefined) data.language = language
+
   const brand = await prisma.brand.update({
     where: { id: req.params.id },
-    data: req.body,
+    data,
   })
   res.json(brand)
 })

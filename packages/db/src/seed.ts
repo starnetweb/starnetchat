@@ -192,12 +192,13 @@ Be encouraging and enthusiastic about technology education. Help users identify 
   ]
 
   for (const brand of brands) {
+    const existing = await prisma.brand.findUnique({ where: { slug: brand.slug } })
     const created = await prisma.brand.upsert({
       where: { slug: brand.slug },
+      // On update: never overwrite systemPrompt — preserve any edits made via dashboard
       update: {
         name: brand.name,
         keywords: brand.keywords,
-        systemPrompt: brand.systemPrompt,
       },
       create: { ...brand, language: 'en' },
     })
