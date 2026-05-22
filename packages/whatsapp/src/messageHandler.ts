@@ -175,6 +175,7 @@ export async function handleIncomingMessage(sock: any, msg: proto.IWebMessageInf
 
   // Show typing indicator while AI generates response
   await sock.sendPresenceUpdate('composing', jid)
+  emit('typing', { conversationId: conversation.id })
 
   // Generate AI response
   console.log(`[AI] Generating response for brand ${brandId!}...`)
@@ -183,6 +184,7 @@ export async function handleIncomingMessage(sock: any, msg: proto.IWebMessageInf
 
   // Stop typing indicator then send
   await sock.sendPresenceUpdate('paused', jid)
+  emit('typing:stop', { conversationId: conversation.id })
   await sock.sendMessage(jid, { text: response })
 
   await prisma.message.create({

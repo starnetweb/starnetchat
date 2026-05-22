@@ -44,6 +44,7 @@ export default function ChatsPage() {
   const [showNotes, setShowNotes] = useState(false)
   const [attachFile, setAttachFile] = useState<File | null>(null)
   const [attachPreview, setAttachPreview] = useState<string | null>(null)
+  const [aiTyping, setAiTyping] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
   const socket = useSocket()
@@ -65,7 +66,14 @@ export default function ChatsPage() {
 
   useEffect(() => {
     if (!socket) return
+    socket.on('typing', (data: any) => {
+      if (selected && data.conversationId === selected.id) setAiTyping(true)
+    })
+    socket.on('typing:stop', (data: any) => {
+      if (selected && data.conversationId === selected.id) setAiTyping(false)
+    })
     socket.on('message:new', (data: any) => {
+      setAiTyping(false)
       if (selected && data.conversationId === selected.id) {
         setMessages((m) => [...m, data])
         // Mark as read immediately since this conv is open
@@ -75,7 +83,7 @@ export default function ChatsPage() {
       }
       loadConversations()
     })
-    return () => { socket.off('message:new') }
+    return () => { socket.off('message:new'); socket.off('typing'); socket.off('typing:stop') }
   }, [socket, selected])
 
   useEffect(() => {
@@ -289,6 +297,16 @@ export default function ChatsPage() {
                   </div>
                 </div>
               ))}
+              {/* AI typing indicator */}
+              {aiTyping && (
+                <div className="flex justify-end">
+                  <div className="bg-green-600 rounded-2xl rounded-br-sm px-4 py-3 flex items-center gap-1.5">
+                    <span className="w-2 h-2 bg-white/70 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                    <span className="w-2 h-2 bg-white/70 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                    <span className="w-2 h-2 bg-white/70 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                  </div>
+                </div>
+              )}
               <div ref={bottomRef} />
             </div>
 
