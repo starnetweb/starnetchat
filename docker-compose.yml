@@ -2,9 +2,15 @@ services:
   api:
     image: ghcr.io/starnetweb/starnetchat-api:latest
     restart: always
-    env_file: .env
     environment:
       - NODE_ENV=production
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=${REDIS_URL}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - API_PORT=4000
+      - DASHBOARD_URL=${DASHBOARD_URL}
+      - WA_SESSION_PATH=/app/wa-sessions
+      - JWT_SECRET=${JWT_SECRET}
     ports:
       - "4000:4000"
     volumes:
@@ -14,9 +20,9 @@ services:
   dashboard:
     image: ghcr.io/starnetweb/starnetchat-dashboard:latest
     restart: always
-    env_file: .env
     environment:
       - NODE_ENV=production
+      - NEXT_PUBLIC_API_URL=${DASHBOARD_URL}
     ports:
       - "3000:3000"
 
