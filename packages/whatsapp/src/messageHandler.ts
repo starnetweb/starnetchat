@@ -81,6 +81,22 @@ export async function handleIncomingMessage(sock: any, msg: proto.IWebMessageInf
       brandId = detection.brandId
       brandConfirmed = true
     } else {
+      // Only send fallback prompt if AI is enabled — in human mode just log and stop
+      if (!aiEnabled) {
+        console.log('[MSG] AI disabled — skipping brand detection fallback reply')
+        if (!conversation) {
+          const anyBrand = await prisma.brand.findFirst({ where: { isActive: true } })
+          conversation = await prisma.conversation.create({
+            data: { brandId: anyBrand!.id, contactId: contact.id, brandConfirmed: false },
+            include: { messages: { take: 0 } },
+          })
+        }
+        await prisma.message.create({
+          data: { conversationId: conversation.id, direction: 'INBOUND', role: 'USER', content: text, whatsappMsgId: msg.key.id },
+        })
+        emit('message:new', { conversationId: conversation.id, direction: 'INBOUND', content: text })
+        return
+      }
       await sock.sendMessage(jid, { text: FALLBACK_PROMPT })
 
       if (!conversation) {
@@ -129,13 +145,7 @@ export async function handleIncomingMessage(sock: any, msg: proto.IWebMessageInf
 
   emit('message:new', { conversationId: conversation.id, direction: 'INBOUND', content: text })
 
-  // ── If AI is disabled, message is already logged — just stop here ─────────
-  if (!aiEnabled) {
-    console.log('[MSG] AI globally disabled — message logged, no auto-reply')
-    return
-  }
-
-  // ── Quick Reply Check (bypasses AI entirely) ─────────────────────────────
+  // ── Quick Reply Check (fires even in human mode — not AI) ────────────────
   const quickReplies = await prisma.quickReply.findMany({
     where: { brandId, isActive: true },
     include: { messages: { orderBy: { order: 'asc' } } },
@@ -176,6 +186,12 @@ export async function handleIncomingMessage(sock: any, msg: proto.IWebMessageInf
       })
       emit('message:new', { conversationId: conversation.id, direction: 'OUTBOUND', content: text })
     }
+    return
+  }
+
+  // ── If AI is disabled, message is logged and quick replies ran — stop here ─
+  if (!aiEnabled) {
+    console.log('[MSG] AI globally disabled — message logged, no AI reply')
     return
   }
 
