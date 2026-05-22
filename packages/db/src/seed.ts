@@ -233,6 +233,134 @@ Be encouraging and enthusiastic about technology education. Help users identify 
     })
   }
 
+  // ── Welcome Quick Replies ─────────────────────────────────────────────────
+  console.log('\nSeeding welcome quick replies...')
+
+  const welcomeReplies: Record<string, { message: string }> = {
+    'blazingprojects': {
+      message: `Hello! 👋 Welcome to *BlazingProjects*!
+
+I'm here to assist you with your academic research needs.
+
+What would you like help with today?
+
+- 🔍 Search for a project in your field of study?
+- 📥 Access a purchased project?
+- 💳 Payment or order support?
+- 📚 Learn about our research materials?
+
+Please tell me how I can help! 😊`,
+    },
+    'examkits': {
+      message: `Hello! 👋 Welcome to *ExamKits*!
+
+I'm here to help you prepare and ace your exams! 🎯
+
+What can I help you with today?
+
+- 📝 Find past questions for JAMB, WAEC, NECO or Post UTME?
+- 🖥️ Access your CBT practice account?
+- 💳 Payment or subscription support?
+- 📚 Choose the right exam prep package?
+
+Let me know and I'll get you sorted! 💪`,
+    },
+    'watmall': {
+      message: `Hello! 👋 Welcome to *Watmall*!
+
+Your one-stop online shopping destination 🛒
+
+How can I assist you today?
+
+- 🔍 Find a product or check availability?
+- 📦 Track an existing order?
+- 💳 Payment or checkout support?
+- 🔄 Return or refund request?
+
+Tell me what you need and I'll help right away! 😊`,
+    },
+    'payapp': {
+      message: `Hello! 👋 Welcome to *Payapp*!
+
+Your trusted payment and money transfer platform 💳
+
+How can I help you today?
+
+- 💸 Send or receive money?
+- 📱 Buy airtime or pay bills?
+- ❓ Transaction issue or failed payment?
+- 🔐 Account verification or access?
+
+Please share your request and I'll assist you immediately! 🙂
+
+⚠️ *Security Note:* Payapp staff will NEVER ask for your PIN or OTP.`,
+    },
+    'realtour': {
+      message: `Hello! 👋 Welcome to *Realtour*!
+
+Nigeria's trusted real estate platform 🏠
+
+What are you looking for today?
+
+- 🏠 Find a property to buy or rent?
+- 📅 Schedule a property viewing or tour?
+- 🏢 List your property for sale or rent?
+- 🤝 Connect with a verified agent?
+
+Let me help you find your perfect property! 😊`,
+    },
+    'stanet-academy': {
+      message: `Hello! 👋 Welcome to *Stanet Academy*!
+
+Your gateway to world-class ICT training 💻
+
+What would you like to know?
+
+- 📚 View available courses and programs?
+- 📝 Enroll in a course or training?
+- 📅 Check class schedules and fees?
+- 🎓 Learn about certifications?
+
+Tell me your interest and I'll guide you! 🚀`,
+    },
+  }
+
+  const greetingKeywords = [
+    'hi', 'hello', 'hey', 'good morning', 'good afternoon', 'good evening',
+    'howdy', 'hiya', 'greetings', 'sup', 'whatsup', 'what\'s up',
+    'morning', 'afternoon', 'evening', 'hi there', 'hello there',
+    'start', 'begin', 'help', 'info', 'information', 'enquire', 'enquiry',
+    'inquire', 'inquiry', 'interested', 'welcome',
+  ]
+
+  for (const brand of await prisma.brand.findMany()) {
+    const welcome = welcomeReplies[brand.slug]
+    if (!welcome) continue
+
+    // Check if a welcome quick reply already exists for this brand
+    const existing = await prisma.quickReply.findFirst({
+      where: { brandId: brand.id, name: 'Welcome Message' },
+    })
+
+    if (!existing) {
+      const qr = await prisma.quickReply.create({
+        data: {
+          brandId: brand.id,
+          name: 'Welcome Message',
+          keywords: greetingKeywords,
+          matchType: 'ANY',
+          isActive: true,
+          messages: {
+            create: [{ body: welcome.message, delaySeconds: 0, order: 0 }],
+          },
+        },
+      })
+      console.log(`✓ Welcome quick reply: ${brand.name} (${qr.id})`)
+    } else {
+      console.log(`→ Welcome quick reply already exists: ${brand.name} — skipping`)
+    }
+  }
+
   console.log('\n✅ Seed complete!')
   console.log('→ Login: http://localhost:3000/login')
   console.log('→ Email: admin@company.com | Password: admin123')
