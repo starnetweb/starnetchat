@@ -1,8 +1,4 @@
 import type { Metadata } from 'next'
-import { Inter } from 'next/font/google'
-import './globals.css'
-
-const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
   title: 'WhatsApp Care Dashboard',
@@ -13,9 +9,27 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <head>
-        <script src="https://cdn.tailwindcss.com" async></script>
+        <script src="https://cdn.tailwindcss.com"></script>
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+        <style>{`
+          *, *::before, *::after { box-sizing: border-box; }
+          html, body { height: 100%; margin: 0; padding: 0; }
+          body { font-family: 'Inter', -apple-system, sans-serif; background: #f0f2f5; color: #111827; }
+          .btn-primary { background:#16a34a;color:white;font-weight:500;padding:0.5rem 1rem;border-radius:0.5rem;border:none;cursor:pointer;display:inline-flex;align-items:center;gap:0.5rem;font-size:0.875rem;transition:background 0.15s; }
+          .btn-primary:hover { background:#15803d; }
+          .btn-secondary { background:white;color:#374151;font-weight:500;padding:0.5rem 1rem;border-radius:0.5rem;border:1px solid #e5e7eb;cursor:pointer;display:inline-flex;align-items:center;gap:0.5rem;font-size:0.875rem;transition:background 0.15s; }
+          .btn-secondary:hover { background:#f9fafb; }
+          .btn-danger { background:#fef2f2;color:#dc2626;font-weight:500;padding:0.5rem 1rem;border-radius:0.5rem;border:none;cursor:pointer;display:inline-flex;align-items:center;gap:0.5rem;font-size:0.875rem;transition:background 0.15s; }
+          .btn-danger:hover { background:#fee2e2; }
+          .card { background:white;border-radius:0.75rem;border:1px solid #f3f4f6;box-shadow:0 1px 2px rgba(0,0,0,0.05); }
+          .input { width:100%;border:1px solid #e5e7eb;border-radius:0.5rem;padding:0.625rem 1rem;font-size:0.875rem;outline:none;transition:all 0.15s; }
+          .input:focus { border-color:transparent;box-shadow:0 0 0 2px #16a34a; }
+          .badge-green { font-size:0.75rem;padding:0.25rem 0.625rem;border-radius:9999px;font-weight:500;background:#dcfce7;color:#15803d; }
+          .badge-gray { font-size:0.75rem;padding:0.25rem 0.625rem;border-radius:9999px;font-weight:500;background:#f3f4f6;color:#6b7280; }
+          .badge-yellow { font-size:0.75rem;padding:0.25rem 0.625rem;border-radius:9999px;font-weight:500;background:#fef9c3;color:#a16207; }
+        `}</style>
       </head>
-      <body className={inter.className}>{children}</body>
+      <body>{children}</body>
     </html>
   )
 }
