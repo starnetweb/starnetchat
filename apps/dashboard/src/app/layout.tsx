@@ -11,7 +11,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <head>
         <script src="https://cdn.tailwindcss.com"></script>
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
-        <style>{`
+        <style dangerouslySetInnerHTML={{__html: `
           *, *::before, *::after { box-sizing: border-box; }
           html, body { height: 100%; margin: 0; padding: 0; }
           body { font-family: 'Inter', -apple-system, sans-serif; background: #f0f2f5; color: #111827; }
@@ -27,7 +27,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           .badge-green { font-size:0.75rem;padding:0.25rem 0.625rem;border-radius:9999px;font-weight:500;background:#dcfce7;color:#15803d; }
           .badge-gray { font-size:0.75rem;padding:0.25rem 0.625rem;border-radius:9999px;font-weight:500;background:#f3f4f6;color:#6b7280; }
           .badge-yellow { font-size:0.75rem;padding:0.25rem 0.625rem;border-radius:9999px;font-weight:500;background:#fef9c3;color:#a16207; }
-        `}</style>
+        `}} />
       </head>
       <body>{children}</body>
     </html>
