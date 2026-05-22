@@ -152,6 +152,7 @@ export async function handleIncomingMessage(sock: any, msg: proto.IWebMessageInf
 
   if (matched) {
     console.log(`[QUICK-REPLY] Matched rule "${matched.name}" — skipping AI`)
+    try { await sock.presenceSubscribe(jid) } catch {}
     for (const qrMsg of matched.messages) {
       if (qrMsg.delaySeconds > 0) {
         await new Promise((r) => setTimeout(r, qrMsg.delaySeconds * 1000))
@@ -174,6 +175,8 @@ export async function handleIncomingMessage(sock: any, msg: proto.IWebMessageInf
   }
 
   // Show typing indicator while AI generates response
+  // Must subscribe to presence first — required by Baileys before sendPresenceUpdate works
+  try { await sock.presenceSubscribe(jid) } catch {}
   await sock.sendPresenceUpdate('composing', jid)
   emit('typing', { conversationId: conversation.id })
 
