@@ -37,7 +37,7 @@ jobs:
           context: .
           file: ./apps/api/Dockerfile
           push: true
-          tags: ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}-api:latest
+          tags: ghcr.io/starnetweb/starnetchat-api:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -47,7 +47,7 @@ jobs:
           context: .
           file: ./apps/dashboard/Dockerfile
           push: true
-          tags: ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}-dashboard:latest
+          tags: ghcr.io/starnetweb/starnetchat-dashboard:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -70,13 +70,9 @@ jobs:
             echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
             # Pull latest images
-            GITHUB_USER=${{ github.repository_owner }} \
-            GITHUB_REPO=${{ github.event.repository.name }} \
             docker compose pull
 
             # Restart with zero downtime
-            GITHUB_USER=${{ github.repository_owner }} \
-            GITHUB_REPO=${{ github.event.repository.name }} \
             docker compose up -d --remove-orphans
 
             # Clean up old images

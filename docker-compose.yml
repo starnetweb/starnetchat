@@ -1,6 +1,6 @@
 services:
   api:
-    image: ghcr.io/${GITHUB_USER}/${GITHUB_REPO}-api:latest
+    image: ghcr.io/starnetweb/starnetchat-api:latest
     restart: always
     env_file: .env
     environment:
@@ -12,7 +12,7 @@ services:
       - wac
 
   dashboard:
-    image: ghcr.io/${GITHUB_USER}/${GITHUB_REPO}-dashboard:latest
+    image: ghcr.io/starnetweb/starnetchat-dashboard:latest
     restart: always
     env_file: .env
     environment:
