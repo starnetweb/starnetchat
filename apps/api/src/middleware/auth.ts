@@ -10,7 +10,7 @@ export function authMiddleware(req: AuthRequest, res: Response, next: NextFuncti
   if (!token) return res.status(401).json({ error: 'Unauthorized' })
 
   try {
-    const payload = jwt.verify(token, process.env.NEXTAUTH_SECRET!) as any
+    const payload = jwt.verify(token, process.env.JWT_SECRET!) as any
     req.user = payload
     next()
   } catch {
