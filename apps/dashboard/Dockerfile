@@ -1,12 +1,12 @@
-FROM node:20-alpine
+FROM node:20
 
 RUN npm install -g pnpm
 
 WORKDIR /app
 
-# Copy entire monorepo and install
+# Copy entire monorepo and install (including devDeps for tailwind/postcss)
 COPY . .
-RUN pnpm install
+RUN pnpm install --no-frozen-lockfile
 
 WORKDIR /app/apps/dashboard
 
