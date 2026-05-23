@@ -122,7 +122,7 @@ export async function handleIncomingMessage(sock: any, msg: proto.IWebMessageInf
   // ── Create / update conversation ─────────────────────────────────────────
   if (!conversation) {
     conversation = await prisma.conversation.create({
-      data: { brandId, contactId: contact.id, brandConfirmed: true },
+      data: { brandId, contactId: contact.id, brandConfirmed: true, aiManaged: true },
       include: { messages: { take: 0 } },
     })
   } else if (!conversation.brandConfirmed) {
@@ -144,6 +144,12 @@ export async function handleIncomingMessage(sock: any, msg: proto.IWebMessageInf
   })
 
   emit('message:new', { conversationId: conversation.id, direction: 'INBOUND', content: text })
+
+  // ── Skip AI for conversations not started by AI (pre-existing chats) ──────
+  if (!(conversation as any).aiManaged) {
+    console.log('[MSG] Conversation not AI-managed — skipping AI response')
+    return
+  }
 
   // ── Quick Reply Check (fires even in human mode — not AI) ────────────────
   const quickReplies = await prisma.quickReply.findMany({

@@ -102,6 +102,9 @@ model Conversation {
   // WhatsApp Business labels applied to this chat (e.g. "Follow Up", "Project Delivered")
   labels      String[]   @default([])
 
+  // AI management flag — false means AI will not respond to this conversation
+  aiManaged   Boolean    @default(false)
+
   brand       Brand     @relation(fields: [brandId], references: [id])
   contact     Contact   @relation(fields: [contactId], references: [id])
   messages    Message[]

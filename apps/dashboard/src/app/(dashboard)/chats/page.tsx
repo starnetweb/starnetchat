@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useSocket } from '@/lib/socket'
 import { formatDistanceToNow } from 'date-fns'
-import { Send, CheckCheck, StickyNote, Save, X, User, Paperclip, FileText } from 'lucide-react'
+import { Send, CheckCheck, StickyNote, Save, X, User, Paperclip, FileText, Bot, BotOff } from 'lucide-react'
 import Link from 'next/link'
 
 import { api } from '@/lib/api'
@@ -228,6 +228,17 @@ export default function ChatsPage() {
                 </div>
               </div>
               <div className="flex items-center gap-2 shrink-0">
+                {/* Per-conversation AI toggle */}
+                <button
+                  onClick={async () => {
+                    const updated = await api.patch(`/chats/conversations/${selected.id}`, { aiManaged: !(selected as any).aiManaged })
+                    setSelected((s: any) => ({ ...s, aiManaged: updated.aiManaged }))
+                  }}
+                  className={`text-xs py-1.5 px-3 rounded-lg flex items-center gap-1 font-medium border transition ${(selected as any).aiManaged ? 'bg-green-50 text-green-700 border-green-200' : 'bg-gray-50 text-gray-500 border-gray-200'}`}
+                  title={(selected as any).aiManaged ? 'AI is ON for this chat — click to disable' : 'AI is OFF for this chat — click to enable'}
+                >
+                  {(selected as any).aiManaged ? <><Bot size={12} /> AI On</> : <><BotOff size={12} /> AI Off</>}
+                </button>
                 <Link href={`/contacts/${selected.contact.id}`} className="btn-secondary text-xs py-1.5 px-3 flex items-center gap-1">
                   <User size={12} /> Profile
                 </Link>
