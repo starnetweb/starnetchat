@@ -19,7 +19,7 @@ services:
       - uploads:/app/apps/api/uploads
     labels:
       - traefik.enable=true
-      - traefik.http.routers.starnetchat-api.rule=Host(`chat.187.124.208.137.nip.io`)
+      - traefik.http.routers.starnetchat-api.rule=Host(`api.187.124.208.137.nip.io`)
       - traefik.http.routers.starnetchat-api.entrypoints=websecure
       - traefik.http.routers.starnetchat-api.tls.certresolver=letsencrypt
       - traefik.http.services.starnetchat-api.loadbalancer.server.port=4000
@@ -37,7 +37,7 @@ services:
       - api
     labels:
       - traefik.enable=true
-      - traefik.http.routers.starnetchat-dashboard.rule=Host(`187.124.208.137.nip.io`)
+      - traefik.http.routers.starnetchat-dashboard.rule=Host(`chat.187.124.208.137.nip.io`)
       - traefik.http.routers.starnetchat-dashboard.entrypoints=websecure
       - traefik.http.routers.starnetchat-dashboard.tls.certresolver=letsencrypt
       - traefik.http.services.starnetchat-dashboard.loadbalancer.server.port=3001
