@@ -1,12 +1,32 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useAuthStore } from '@/lib/store'
-import { User, Lock, Bell, Shield, Save, Loader2 } from 'lucide-react'
+import { User, Lock, Bell, Shield, Save, Loader2, Bot } from 'lucide-react'
+import { api } from '@/lib/api'
 
 export default function SettingsPage() {
   const { user } = useAuthStore()
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [aiModel, setAiModel] = useState<'claude' | 'gpt'>('claude')
+  const [modelSaving, setModelSaving] = useState(false)
+  const [modelSaved, setModelSaved] = useState(false)
+
+  useEffect(() => {
+    api.get('/whatsapp/ai-model').then((d: any) => setAiModel(d.aiModel ?? 'claude')).catch(() => {})
+  }, [])
+
+  async function handleModelSwitch(model: 'claude' | 'gpt') {
+    setModelSaving(true)
+    try {
+      await api.post('/whatsapp/ai-model', { aiModel: model })
+      setAiModel(model)
+      setModelSaved(true)
+      setTimeout(() => setModelSaved(false), 3000)
+    } finally {
+      setModelSaving(false)
+    }
+  }
 
   const [form, setForm] = useState({
     name: user?.name || '',
@@ -150,6 +170,58 @@ export default function SettingsPage() {
             </div>
           ))}
         </div>
+      </div>
+
+      {/* AI Model */}
+      <div className="card p-6">
+        <div className="flex items-center gap-3 mb-5">
+          <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center">
+            <Bot size={16} className="text-purple-600" />
+          </div>
+          <div>
+            <h2 className="font-semibold text-gray-900 text-sm">AI Model</h2>
+            <p className="text-xs text-gray-400">Choose which AI model responds to customers</p>
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          {[
+            {
+              id: 'claude' as const,
+              name: 'Claude Haiku',
+              provider: 'Anthropic',
+              desc: 'Fast, efficient, great at following rules',
+              color: 'orange',
+            },
+            {
+              id: 'gpt' as const,
+              name: 'GPT-4.1 Nano',
+              provider: 'OpenAI',
+              desc: 'Lightweight GPT model, quick responses',
+              color: 'green',
+            },
+          ].map((m) => (
+            <button
+              key={m.id}
+              onClick={() => handleModelSwitch(m.id)}
+              disabled={modelSaving}
+              className={`relative p-4 rounded-xl border-2 text-left transition-all ${
+                aiModel === m.id
+                  ? 'border-purple-500 bg-purple-50'
+                  : 'border-gray-200 bg-white hover:border-gray-300'
+              }`}
+            >
+              {aiModel === m.id && (
+                <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-purple-500" />
+              )}
+              <div className="text-sm font-semibold text-gray-900">{m.name}</div>
+              <div className="text-xs text-gray-400 mt-0.5">{m.provider}</div>
+              <div className="text-xs text-gray-500 mt-1.5">{m.desc}</div>
+            </button>
+          ))}
+        </div>
+        {modelSaved && (
+          <p className="text-xs text-green-600 font-medium mt-3">✓ Model updated successfully</p>
+        )}
       </div>
 
       {/* Save */}

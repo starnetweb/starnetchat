@@ -50,6 +50,8 @@ model WhatsappSession {
   qrCode    String?       @db.Text
   // Global AI toggle — when false, AI is silenced system-wide; human CS handles everything
   aiEnabled Boolean       @default(true)
+  // AI model: "claude" = Anthropic claude-haiku-4-5 | "gpt" = OpenAI gpt-4.1-nano
+  aiModel   String        @default("claude")
   createdAt DateTime      @default(now())
   updatedAt DateTime      @updatedAt
 

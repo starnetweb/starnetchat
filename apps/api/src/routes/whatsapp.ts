@@ -44,3 +44,23 @@ waRouter.post('/ai-toggle', async (_req, res) => {
   })
   res.json({ aiEnabled: updated.aiEnabled })
 })
+
+// AI model selection
+waRouter.get('/ai-model', async (_req, res) => {
+  const session = await prisma.whatsappSession.findFirst({ where: { sessionKey: 'main' } })
+  res.json({ aiModel: session?.aiModel ?? 'claude' })
+})
+
+waRouter.post('/ai-model', async (req, res) => {
+  const { aiModel } = req.body
+  if (!['claude', 'gpt'].includes(aiModel)) {
+    return res.status(400).json({ error: 'Invalid model. Use "claude" or "gpt"' })
+  }
+  const session = await prisma.whatsappSession.findFirst({ where: { sessionKey: 'main' } })
+  if (!session) return res.status(404).json({ error: 'Session not found' })
+  const updated = await prisma.whatsappSession.update({
+    where: { id: session.id },
+    data: { aiModel },
+  })
+  res.json({ aiModel: updated.aiModel })
+})
