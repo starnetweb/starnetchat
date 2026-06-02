@@ -40,7 +40,7 @@ services:
       - traefik.http.routers.starnetchat-dashboard.rule=Host(`187.124.208.137.nip.io`)
       - traefik.http.routers.starnetchat-dashboard.entrypoints=websecure
       - traefik.http.routers.starnetchat-dashboard.tls.certresolver=letsencrypt
-      - traefik.http.services.starnetchat-dashboard.loadbalancer.server.port=3000
+      - traefik.http.services.starnetchat-dashboard.loadbalancer.server.port=3001
 
 volumes:
   wa-sessions:
