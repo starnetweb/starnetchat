@@ -17,8 +17,6 @@ services:
     volumes:
       - wa-sessions:/app/wa-sessions
       - uploads:/app/apps/api/uploads
-    networks:
-      - traefik-proxy
     labels:
       - traefik.enable=true
       - traefik.http.routers.starnetchat-api.rule=Host(`chat.187.124.208.137.nip.io`)
@@ -37,8 +35,6 @@ services:
       - "3001:3000"
     depends_on:
       - api
-    networks:
-      - traefik-proxy
     labels:
       - traefik.enable=true
       - traefik.http.routers.starnetchat-dashboard.rule=Host(`187.124.208.137.nip.io`)
@@ -49,7 +45,3 @@ services:
 volumes:
   wa-sessions:
   uploads:
-
-networks:
-  traefik-proxy:
-    external: true
