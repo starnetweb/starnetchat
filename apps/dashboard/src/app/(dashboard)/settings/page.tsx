@@ -194,9 +194,9 @@ export default function SettingsPage() {
             },
             {
               id: 'gpt' as const,
-              name: 'GPT-4.1 Nano',
+              name: 'GPT-5.4 Nano',
               provider: 'OpenAI',
-              desc: 'Lightweight GPT model, quick responses',
+              desc: 'Cheapest GPT-5 class model, fast responses',
               color: 'green',
             },
           ].map((m) => (

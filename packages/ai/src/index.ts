@@ -158,7 +158,7 @@ async function generateWithOpenAI(
   ]
 
   const response = await getOpenAIClient().chat.completions.create({
-    model: 'gpt-4.1-nano',
+    model: 'gpt-5.4-nano',
     max_tokens: 1024,
     messages,
   })
