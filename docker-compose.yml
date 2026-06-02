@@ -7,6 +7,7 @@ services:
       - DATABASE_URL=${DATABASE_URL}
       - REDIS_URL=${REDIS_URL}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
       - API_PORT=4000
       - DASHBOARD_URL=${DASHBOARD_URL}
       - WA_SESSION_PATH=/app/wa-sessions
@@ -16,6 +17,12 @@ services:
     volumes:
       - wa-sessions:/app/wa-sessions
       - uploads:/app/apps/api/uploads
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.starnetchat-api.rule=Host(`api.187.124.208.137.nip.io`)
+      - traefik.http.routers.starnetchat-api.entrypoints=websecure
+      - traefik.http.routers.starnetchat-api.tls.certresolver=letsencrypt
+      - traefik.http.services.starnetchat-api.loadbalancer.server.port=4000
 
   dashboard:
     image: ghcr.io/starnetweb/starnetchat-dashboard:latest
@@ -28,6 +35,12 @@ services:
       - "3001:3000"
     depends_on:
       - api
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.starnetchat-dashboard.rule=Host(`187.124.208.137.nip.io`)
+      - traefik.http.routers.starnetchat-dashboard.entrypoints=websecure
+      - traefik.http.routers.starnetchat-dashboard.tls.certresolver=letsencrypt
+      - traefik.http.services.starnetchat-dashboard.loadbalancer.server.port=3000
 
 volumes:
   wa-sessions:
