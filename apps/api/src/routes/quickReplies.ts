@@ -15,7 +15,7 @@ quickReplyRouter.get('/:brandId', async (req, res) => {
 
 // Create a quick reply with its messages
 quickReplyRouter.post('/:brandId', async (req, res) => {
-  const { name, keywords, matchType, messages } = req.body
+  const { name, keywords, matchType, contactType, messages } = req.body
   if (!name || !keywords?.length || !messages?.length) {
     return res.status(400).json({ error: 'name, keywords, and messages are required' })
   }
@@ -26,6 +26,7 @@ quickReplyRouter.post('/:brandId', async (req, res) => {
       name,
       keywords,
       matchType: matchType || 'ANY',
+      contactType: contactType || 'all',
       messages: {
         create: messages.map((m: { body: string; variations?: string[]; delaySeconds?: number }, i: number) => ({
           body: m.body,
@@ -42,7 +43,7 @@ quickReplyRouter.post('/:brandId', async (req, res) => {
 
 // Update a quick reply
 quickReplyRouter.put('/:brandId/:id', async (req, res) => {
-  const { name, keywords, matchType, isActive, messages } = req.body
+  const { name, keywords, matchType, contactType, isActive, messages } = req.body
 
   // Delete old messages and recreate
   await prisma.quickReplyMessage.deleteMany({ where: { quickReplyId: req.params.id } })
@@ -53,6 +54,7 @@ quickReplyRouter.put('/:brandId/:id', async (req, res) => {
       name,
       keywords,
       matchType,
+      ...(contactType ? { contactType } : {}),
       isActive,
       messages: messages
         ? {

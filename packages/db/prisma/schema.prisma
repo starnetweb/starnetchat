@@ -263,6 +263,8 @@ model QuickReply {
   name         String   // friendly name e.g. "Undergraduate Interest"
   keywords     String[] // trigger keywords to match
   matchType    String   @default("ANY") // "ANY" = at least one keyword, "ALL" = all keywords
+  // "all" = fire for everyone, "first" = new contacts only, "returning" = existing contacts only
+  contactType  String   @default("all")
   isActive     Boolean  @default(true)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt

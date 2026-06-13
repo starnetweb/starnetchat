@@ -18,6 +18,7 @@ interface QuickReply {
   name: string
   keywords: string[]
   matchType: string
+  contactType: string
   isActive: boolean
   messages: QRMessage[]
 }
@@ -26,6 +27,7 @@ const emptyForm = () => ({
   name: '',
   keywords: '' as string,
   matchType: 'ANY',
+  contactType: 'all',
   messages: [] as QRMessage[],
 })
 
@@ -53,6 +55,7 @@ export default function QuickRepliesPage() {
       name: qr.name,
       keywords: qr.keywords.join(', '),
       matchType: qr.matchType,
+      contactType: qr.contactType ?? 'all',
       messages: qr.messages.map((m) => ({ ...m, variations: m.variations ?? [] })),
     })
     setShowForm(true)
@@ -101,6 +104,7 @@ export default function QuickRepliesPage() {
       name: form.name.trim(),
       keywords: form.keywords.split(',').map((k) => k.trim()).filter(Boolean),
       matchType: form.matchType,
+      contactType: form.contactType,
       messages: normalised,
     }
 
@@ -157,7 +161,7 @@ export default function QuickRepliesPage() {
             <div className="card p-6 space-y-5">
               <h2 className="font-semibold text-gray-900">{editingId ? 'Edit' : 'New'} Quick Reply</h2>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-3 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
                   <input className="input" placeholder='e.g. "Undergraduate Interest"' value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
@@ -167,6 +171,14 @@ export default function QuickRepliesPage() {
                   <select className="input" value={form.matchType} onChange={(e) => setForm((f) => ({ ...f, matchType: e.target.value }))}>
                     <option value="ANY">ANY keyword matches</option>
                     <option value="ALL">ALL keywords must match</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Contact Type</label>
+                  <select className="input" value={form.contactType} onChange={(e) => setForm((f) => ({ ...f, contactType: e.target.value }))}>
+                    <option value="all">Everyone</option>
+                    <option value="first">First-time only</option>
+                    <option value="returning">Returning only</option>
                   </select>
                 </div>
               </div>
@@ -270,6 +282,13 @@ export default function QuickRepliesPage() {
                         </span>
                         <span className="text-xs px-2 py-0.5 rounded-full bg-blue-50 text-blue-600 font-medium">
                           Match {qr.matchType}
+                        </span>
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                          qr.contactType === 'first' ? 'bg-purple-50 text-purple-600' :
+                          qr.contactType === 'returning' ? 'bg-orange-50 text-orange-600' :
+                          'bg-gray-50 text-gray-500'
+                        }`}>
+                          {qr.contactType === 'first' ? 'First-time' : qr.contactType === 'returning' ? 'Returning' : 'Everyone'}
                         </span>
                       </div>
 

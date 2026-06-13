@@ -152,6 +152,10 @@ export async function handleIncomingMessage(sock: any, msg: proto.IWebMessageInf
   }
 
   // ── Quick Reply Check (fires even in human mode — not AI) ────────────────
+  // Determine if this is a first-time or returning contact
+  const totalConversations = await prisma.conversation.count({ where: { contactId: contact.id } })
+  const isFirstContact = totalConversations <= 1
+
   const quickReplies = await prisma.quickReply.findMany({
     where: { brandId, isActive: true },
     include: { messages: { orderBy: { order: 'asc' } } },
@@ -159,6 +163,10 @@ export async function handleIncomingMessage(sock: any, msg: proto.IWebMessageInf
 
   const textLower = text.toLowerCase()
   const matched = quickReplies.find((qr) => {
+    const ct = (qr as any).contactType ?? 'all'
+    if (ct === 'first' && !isFirstContact) return false
+    if (ct === 'returning' && isFirstContact) return false
+
     const kws = qr.keywords.map((k) => k.toLowerCase())
     if (qr.matchType === 'ALL') {
       return kws.every((k) => textLower.includes(k))
