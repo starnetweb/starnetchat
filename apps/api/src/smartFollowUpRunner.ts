@@ -2,15 +2,15 @@ import { prisma } from '@wac/db'
 import { getSocket } from '@wac/whatsapp'
 
 const TWENTY_THREE_HOURS = 23 * 60 * 60 * 1000
+// Only consider conversations opened within the last 30 days — ignore ancient history
+const MAX_CONV_AGE_MS = 30 * 24 * 60 * 60 * 1000
 
 // Human labels that indicate a project/order was completed
 const COMPLETED_HUMAN_LABELS = ['completed', 'delivered', 'done', 'project delivered', 'order delivered', 'finished']
 
 export function startSmartFollowUpRunner() {
-  // Run every hour
+  // Run every hour — NO startup fire to avoid blasting on redeploy
   setInterval(runSmartFollowUps, 60 * 60 * 1000)
-  // Run once 2 minutes after startup
-  setTimeout(runSmartFollowUps, 2 * 60 * 1000)
 }
 
 async function runSmartFollowUps() {
@@ -27,14 +27,14 @@ async function runSmartFollowUps() {
 // ── Completed: ask for a review + offer free PowerPoint ──────────────────────
 async function runCompletedReviewRequests(sock: any) {
   const cutoff = new Date(Date.now() - TWENTY_THREE_HOURS)
+  const oldestAllowed = new Date(Date.now() - MAX_CONV_AGE_MS)
 
-  // Find conversations marked as completed (AI or human label) where review not yet sent
+  // Only conversations opened in the last 30 days, at least 23h old, not yet sent
   const candidates = await prisma.conversation.findMany({
     where: {
       status: 'OPEN',
       reviewRequestSent: false,
-      // Must be at least 23h old
-      openedAt: { lte: cutoff },
+      openedAt: { lte: cutoff, gte: oldestAllowed },
     } as any,
     include: {
       contact: true,
@@ -52,6 +52,7 @@ async function runCompletedReviewRequests(sock: any) {
       COMPLETED_HUMAN_LABELS.some((cl) => l.toLowerCase().includes(cl))
     )
 
+    // Must be explicitly marked completed — never fire speculatively
     if (!isCompletedByAI && !isCompletedByHuman) continue
 
     const jid = conv.contact.whatsappJid
@@ -82,18 +83,18 @@ async function runCompletedReviewRequests(sock: any) {
 // ── No-reply: customer went silent after being asked a question ───────────────
 async function runNoReplyFollowUps(sock: any) {
   const cutoff = new Date(Date.now() - TWENTY_THREE_HOURS)
+  const oldestAllowed = new Date(Date.now() - MAX_CONV_AGE_MS)
 
-  // Find open conversations where the last message was OUTBOUND (we asked something)
-  // and the customer hasn't replied in 23 hours
+  // Only conversations where:
+  // - lastCustomerMsgAt is set (customer actually messaged before — not null/never)
+  // - That last customer message was 23h+ ago
+  // - Conversation opened within last 30 days
   const candidates = await prisma.conversation.findMany({
     where: {
       status: 'OPEN',
       noReplyFollowUpSent: false,
-      // Customer's last message was over 23 hours ago (or never)
-      OR: [
-        { lastCustomerMsgAt: { lte: cutoff } },
-        { lastCustomerMsgAt: null, openedAt: { lte: cutoff } },
-      ],
+      openedAt: { gte: oldestAllowed },
+      lastCustomerMsgAt: { not: null, lte: cutoff },
     } as any,
     include: {
       contact: true,
@@ -103,17 +104,18 @@ async function runNoReplyFollowUps(sock: any) {
   })
 
   for (const conv of candidates) {
-    // Only follow up if the LAST message was from us (OUTBOUND) — meaning we asked and they didn't reply
+    // Only follow up if the LAST message was from us (OUTBOUND) — we asked and they didn't reply
     const lastMsg = conv.messages[0]
     if (!lastMsg || lastMsg.direction !== 'OUTBOUND') continue
 
-    // Skip if it's already a follow-up / re-engagement message (avoid loop)
+    // Skip if our last message was already a follow-up / re-engagement (avoid loop)
     const lastContent = lastMsg.content.toLowerCase()
     if (
       lastContent.includes('just checking in') ||
       lastContent.includes('still interested') ||
-      lastContent.includes('haven\'t heard back') ||
-      lastContent.includes('review')
+      lastContent.includes("haven't heard back") ||
+      lastContent.includes('review') ||
+      lastContent.includes("we noticed we haven't heard")
     ) continue
 
     const jid = conv.contact.whatsappJid

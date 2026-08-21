@@ -218,16 +218,16 @@ chatRouter.post('/trigger-followup', async (req, res) => {
   const sock = getSocket()
   if (!sock) return res.status(503).json({ error: 'WhatsApp not connected' })
 
-  const HOURS = req.body.hours ?? 1  // default: chats silent for 1+ hour (manual is more aggressive)
+  const HOURS = req.body.hours ?? 3  // default: chats silent for 3+ hours
   const cutoff = new Date(Date.now() - HOURS * 60 * 60 * 1000)
+  const oldestAllowed = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) // last 30 days only
 
   const candidates = await prisma.conversation.findMany({
     where: {
       status: 'OPEN',
-      OR: [
-        { lastCustomerMsgAt: { lte: cutoff } },
-        { lastCustomerMsgAt: null, openedAt: { lte: cutoff } },
-      ],
+      openedAt: { gte: oldestAllowed },
+      // Customer must have actually messaged before (lastCustomerMsgAt set) and gone silent
+      lastCustomerMsgAt: { not: null, lte: cutoff },
     } as any,
     include: {
       contact: true,
