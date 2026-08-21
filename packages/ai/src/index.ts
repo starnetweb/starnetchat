@@ -88,7 +88,18 @@ export async function analyzeSentiment(text: string): Promise<'positive' | 'neut
 
 // ── AI Auto-Labeling ──────────────────────────────────────────────────────────
 
-const ALL_AI_LABELS = ['AI-interested', 'AI-price-inquiry', 'AI-complaint', 'AI-followup', 'AI-resolved', 'AI-unresolved', 'AI-urgent', 'AI-new-lead']
+const ALL_AI_LABELS = [
+  'AI-interested',    // customer showing buying interest
+  'AI-price-inquiry', // asked about pricing/cost
+  'AI-complaint',     // expressing frustration or complaint
+  'AI-followup',      // needs a follow-up from the team
+  'AI-resolved',      // question/issue fully answered
+  'AI-unresolved',    // AI couldn't fully answer
+  'AI-urgent',        // time-sensitive or escalation needed
+  'AI-new-lead',      // first contact, potential new customer
+  'AI-paid',          // customer confirmed payment / has paid
+  'AI-completed',     // project/service/order has been delivered or completed
+]
 
 export async function autoLabelConversation(messages: { role: string; content: string }[]): Promise<string[]> {
   try {

@@ -130,6 +130,11 @@ model Conversation {
   // AI-generated summary cached here
   summaryText String?    @db.Text
 
+  // Review request sent after project completion
+  reviewRequestSent  Boolean @default(false)
+  // No-reply follow-up sent when customer goes silent after being asked a question
+  noReplyFollowUpSent Boolean @default(false)
+
   // AI management flag — false means AI will not respond to this conversation
   aiManaged   Boolean    @default(false)
 
