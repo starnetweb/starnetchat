@@ -34,40 +34,32 @@ export async function detectBrand(
 
   if (brands.length === 0) return null
 
-  const brandList = brands
-    .map((b) => `- ID: ${b.id} | Name: ${b.name} | Keywords: ${b.keywords.join(', ')}`)
-    .join('\n')
+  const msgLower = userMessage.toLowerCase()
 
-  const context = conversationHistory.slice(-4).join('\n')
-
-  const response = await getAnthropicClient().messages.create({
-    model: 'claude-haiku-4-5',
-    max_tokens: 100,
-    system: `You are a brand router. Given a customer message, identify which brand they are contacting.
-Return ONLY a JSON object like: {"brandId": "<id>", "confidence": "high"} or {"brandId": null, "confidence": "low"} if unclear.
-Do not explain. Only output valid JSON.
-
-Available brands:
-${brandList}`,
-    messages: [
-      {
-        role: 'user',
-        content: `Recent conversation:\n${context}\n\nLatest message: "${userMessage}"`,
-      },
-    ],
-  })
-
-  try {
-    let text = (response.content[0] as Anthropic.TextBlock).text.trim()
-    text = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim()
-    console.log('[AI] detectBrand raw response:', text)
-    const parsed = JSON.parse(text)
-    if (!parsed.brandId) return null
-    return { brandId: parsed.brandId, confidence: parsed.confidence }
-  } catch (err: any) {
-    console.error('[AI] detectBrand parse error:', err.message)
-    return null
+  // ── Step 1: Direct name/keyword match in the current message only ──────────
+  // A brand is only assigned when the customer explicitly mentions it.
+  for (const brand of brands) {
+    const terms = [brand.name, ...brand.keywords].map((t) => t.toLowerCase())
+    if (terms.some((t) => msgLower.includes(t))) {
+      console.log(`[BRAND] Direct match: "${brand.name}" in message`)
+      return { brandId: brand.id, confidence: 'high' }
+    }
   }
+
+  // ── Step 2: Check recent conversation history for an explicit mention ──────
+  // Only look back if no match in current message — and only accept high confidence
+  const recentHistory = conversationHistory.slice(-6).join(' ').toLowerCase()
+  for (const brand of brands) {
+    const terms = [brand.name, ...brand.keywords].map((t) => t.toLowerCase())
+    if (terms.some((t) => recentHistory.includes(t))) {
+      console.log(`[BRAND] History match: "${brand.name}"`)
+      return { brandId: brand.id, confidence: 'high' }
+    }
+  }
+
+  // ── No explicit mention — do NOT guess ────────────────────────────────────
+  console.log('[BRAND] No brand name mentioned — returning null')
+  return null
 }
 
 // ── Sentiment Analysis ────────────────────────────────────────────────────────
