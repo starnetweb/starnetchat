@@ -82,8 +82,8 @@ export async function handleIncomingMessage(sock: any, msg: proto.IWebMessageInf
       brandId = detection.brandId
       brandConfirmed = true
     } else {
-      // Only send fallback prompt if AI is enabled — in human mode just log and stop
-      if (!aiEnabled) {
+      // Only send fallback prompt if AI is enabled and not in learn mode
+      if (!aiEnabled || learnMode) {
         console.log('[MSG] AI disabled — skipping brand detection fallback reply')
         if (!conversation) {
           const anyBrand = await prisma.brand.findFirst({ where: { isActive: true } })
@@ -188,7 +188,7 @@ export async function handleIncomingMessage(sock: any, msg: proto.IWebMessageInf
     return
   }
 
-  // ── Quick Reply Check (fires even in human mode — not AI) ────────────────
+  // ── Quick Reply Check (fires in human mode but NOT in learn mode) ───────
   // Determine if this is a first-time or returning contact
   const totalConversations = await prisma.conversation.count({ where: { contactId: contact.id } })
   const isFirstContact = totalConversations <= 1
@@ -211,7 +211,7 @@ export async function handleIncomingMessage(sock: any, msg: proto.IWebMessageInf
     return kws.some((k) => textLower.includes(k))
   })
 
-  if (matched) {
+  if (matched && !learnMode) {
     console.log(`[QUICK-REPLY] Matched rule "${matched.name}" — skipping AI`)
     try { await sock.presenceSubscribe(jid) } catch {}
     for (const qrMsg of matched.messages) {
