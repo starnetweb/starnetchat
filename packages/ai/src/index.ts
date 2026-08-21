@@ -127,7 +127,8 @@ export async function generateAIResponse(
 ${knowledgeContext ? `KNOWLEDGE BASE:\n${knowledgeContext}` : ''}${labelContext}${learnedContext}
 
 Always respond in ${brand.language === 'en' ? 'English' : brand.language}.
-Keep responses concise and helpful. If you cannot answer, politely say so and offer to escalate.`
+Keep responses concise and helpful. If you cannot answer, politely say so and offer to escalate.
+IMPORTANT: Never use emojis in any response. Plain text only.`
 
   console.log(`[AI] Using model: ${aiModel}`)
 
