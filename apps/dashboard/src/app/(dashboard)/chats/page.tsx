@@ -79,8 +79,8 @@ export default function ChatsPage() {
     socket.on('message:new', (data: any) => {
       setAiTyping(false)
       if (selected && data.conversationId === selected.id) {
-        setMessages((m) => [...m, data])
-        // Mark as read immediately since this conv is open
+        // Re-fetch full message list so human WhatsApp replies (with all fields) display correctly
+        api.get(`/chats/conversations/${selected.id}/messages`).then(setMessages).catch(() => {})
         api.post(`/chats/conversations/${selected.id}/read`, {}).catch(() => {})
       } else {
         setUnread((u) => ({ ...u, [data.conversationId]: (u[data.conversationId] || 0) + (data.direction === 'INBOUND' ? 1 : 0) }))
