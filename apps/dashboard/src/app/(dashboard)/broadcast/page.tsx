@@ -67,11 +67,11 @@ export default function BroadcastPage() {
       setSending(true)
       try {
         await api.post('/broadcast/schedule', { brandId: selectedBrand, contactIds: Array.from(selectedIds), message, scheduledAt: scheduleAt })
-        setResult({ type: 'success', text: `✅ Broadcast scheduled for ${new Date(scheduleAt).toLocaleString()}` })
+        setResult({ type: 'success', text: `Broadcast scheduled for ${new Date(scheduleAt).toLocaleString()}` })
         setMessage(''); setSelectedIds(new Set()); setScheduleAt('')
         api.get(`/broadcast/scheduled/${selectedBrand}`).then(setScheduled).catch(() => {})
       } catch (err: any) {
-        setResult({ type: 'error', text: `❌ ${err.message}` })
+        setResult({ type: 'error', text: err.message })
       } finally { setSending(false) }
       return
     }
@@ -81,10 +81,10 @@ export default function BroadcastPage() {
     setResult(null)
     try {
       const res = await api.post('/broadcast/send', { brandId: selectedBrand, contactIds: Array.from(selectedIds), message })
-      setResult({ type: 'success', text: `✅ ${res.message}` })
+      setResult({ type: 'success', text: res.message })
       setMessage(''); setSelectedIds(new Set())
     } catch (err: any) {
-      setResult({ type: 'error', text: `❌ ${err.message}` })
+      setResult({ type: 'error', text: err.message })
     } finally { setSending(false) }
   }
 
