@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { useAuthStore } from '@/lib/store'
-import { User, Lock, Bell, Shield, Save, Loader2, Bot } from 'lucide-react'
+import { User, Lock, Bell, Shield, Save, Loader2, Bot, GraduationCap } from 'lucide-react'
 import { api } from '@/lib/api'
 
 export default function SettingsPage() {
@@ -11,10 +11,23 @@ export default function SettingsPage() {
   const [aiModel, setAiModel] = useState<'claude' | 'gpt'>('claude')
   const [modelSaving, setModelSaving] = useState(false)
   const [modelSaved, setModelSaved] = useState(false)
+  const [learnMode, setLearnMode] = useState(false)
+  const [learnSaving, setLearnSaving] = useState(false)
 
   useEffect(() => {
     api.get('/whatsapp/ai-model').then((d: any) => setAiModel(d.aiModel ?? 'claude')).catch(() => {})
+    api.get('/whatsapp/learn-mode').then((d: any) => setLearnMode(d.learnMode ?? false)).catch(() => {})
   }, [])
+
+  async function handleLearnModeToggle(value: boolean) {
+    setLearnSaving(true)
+    try {
+      await api.post('/whatsapp/learn-mode', { learnMode: value })
+      setLearnMode(value)
+    } finally {
+      setLearnSaving(false)
+    }
+  }
 
   async function handleModelSwitch(model: 'claude' | 'gpt') {
     setModelSaving(true)
@@ -222,6 +235,58 @@ export default function SettingsPage() {
         {modelSaved && (
           <p className="text-xs text-green-600 font-medium mt-3">✓ Model updated successfully</p>
         )}
+      </div>
+
+      {/* Learn Mode */}
+      <div className="card p-6">
+        <div className="flex items-center gap-3 mb-5">
+          <div className="w-8 h-8 bg-indigo-100 rounded-lg flex items-center justify-center">
+            <GraduationCap size={16} className="text-indigo-600" />
+          </div>
+          <div>
+            <h2 className="font-semibold text-gray-900 text-sm">AI Learning Mode</h2>
+            <p className="text-xs text-gray-400">Let the AI observe and learn from your human agents before going live</p>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between p-4 rounded-xl border-2 border-gray-100 mb-4">
+          <div className="flex-1">
+            <div className={`text-sm font-semibold ${learnMode ? 'text-indigo-700' : 'text-gray-700'}`}>
+              {learnMode ? 'Learn Mode — AI is observing' : 'Active Mode — AI is responding'}
+            </div>
+            <div className="text-xs text-gray-400 mt-0.5">
+              {learnMode
+                ? 'AI stays silent. Your human replies are captured as training examples.'
+                : 'AI replies using everything it has learned so far.'}
+            </div>
+          </div>
+          <button
+            onClick={() => handleLearnModeToggle(!learnMode)}
+            disabled={learnSaving}
+            className={`relative inline-flex h-7 w-14 items-center rounded-full transition-colors ml-4 ${
+              learnMode ? 'bg-indigo-600' : 'bg-gray-200'
+            }`}
+          >
+            <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${
+              learnMode ? 'translate-x-8' : 'translate-x-1'
+            }`} />
+          </button>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div className={`p-3 rounded-xl border text-sm ${!learnMode ? 'border-green-300 bg-green-50' : 'border-gray-100 bg-gray-50'}`}>
+            <div className="font-medium text-gray-800 mb-1">Active</div>
+            <div className="text-xs text-gray-500">AI responds to all messages using its training and knowledge base.</div>
+          </div>
+          <div className={`p-3 rounded-xl border text-sm ${learnMode ? 'border-indigo-300 bg-indigo-50' : 'border-gray-100 bg-gray-50'}`}>
+            <div className="font-medium text-gray-800 mb-1">Learn</div>
+            <div className="text-xs text-gray-500">Human agents reply. The AI watches and stores each Q&amp;A as an example.</div>
+          </div>
+        </div>
+
+        <p className="text-xs text-gray-400 mt-4">
+          Tip: Start in Learn mode, let your team handle chats for a few days, then switch to Active — the AI will reply in your team's tone.
+        </p>
       </div>
 
       {/* Save */}

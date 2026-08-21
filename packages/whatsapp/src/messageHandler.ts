@@ -35,6 +35,7 @@ export async function handleIncomingMessage(sock: any, msg: proto.IWebMessageInf
   // ── Global AI toggle check (checked later — message is always logged) ────
   const session = await prisma.whatsappSession.findFirst({ where: { sessionKey: 'main' } })
   const aiEnabled = session?.aiEnabled ?? true
+  const learnMode = session?.learnMode ?? false
 
   // Upsert contact — look up by phone OR jid to handle both formats
   let contact = await prisma.contact.findFirst({
@@ -203,6 +204,12 @@ export async function handleIncomingMessage(sock: any, msg: proto.IWebMessageInf
     return
   }
 
+  // ── If learn mode is on, AI stays silent — human agent replies will be captured ─
+  if (learnMode) {
+    console.log('[MSG] Learn mode ON — AI silent, awaiting human reply to learn from')
+    return
+  }
+
   // ── If AI is disabled, message is logged and quick replies ran — stop here ─
   if (!aiEnabled) {
     console.log('[MSG] AI globally disabled — message logged, no AI reply')
@@ -298,6 +305,40 @@ export async function handleHumanAgentReply(msg: proto.IWebMessageInfo) {
 
   console.log(`[HUMAN] CS reply captured for conversation ${conversation.id}: "${text.slice(0, 60)}"`)
   emit('message:new', { conversationId: conversation.id, direction: 'OUTBOUND', content: text })
+
+  // In learn mode: pair this reply with the last customer message as a learned pattern
+  const learnSession = await prisma.whatsappSession.findFirst({ where: { sessionKey: 'main' } })
+  if (learnSession?.learnMode) {
+    const lastInbound = await prisma.message.findFirst({
+      where: { conversationId: conversation.id, direction: 'INBOUND' },
+      orderBy: { sentAt: 'desc' },
+    })
+    if (lastInbound) {
+      // Deduplicate: if same question was seen before, bump frequency instead of creating a new row
+      const existing = await prisma.learnedPattern.findFirst({
+        where: {
+          brandId: conversation.brandId,
+          userMessage: lastInbound.content,
+          agentReply: text,
+        },
+      })
+      if (existing) {
+        await prisma.learnedPattern.update({
+          where: { id: existing.id },
+          data: { frequency: existing.frequency + 1 },
+        })
+      } else {
+        await prisma.learnedPattern.create({
+          data: {
+            brandId: conversation.brandId,
+            userMessage: lastInbound.content,
+            agentReply: text,
+          },
+        })
+      }
+      console.log(`[LEARN] Saved pattern for brand ${conversation.brandId}`)
+    }
+  }
 }
 
 /**

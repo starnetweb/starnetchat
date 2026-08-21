@@ -64,3 +64,39 @@ waRouter.post('/ai-model', async (req, res) => {
   })
   res.json({ aiModel: updated.aiModel })
 })
+
+// Learn mode — when on, AI is silent and human replies are captured as training examples
+waRouter.get('/learn-mode', async (_req, res) => {
+  const session = await prisma.whatsappSession.findFirst({ where: { sessionKey: 'main' } })
+  res.json({ learnMode: session?.learnMode ?? false })
+})
+
+waRouter.post('/learn-mode', async (req, res) => {
+  const { learnMode } = req.body
+  if (typeof learnMode !== 'boolean') {
+    return res.status(400).json({ error: 'learnMode must be a boolean' })
+  }
+  const session = await prisma.whatsappSession.findFirst({ where: { sessionKey: 'main' } })
+  if (!session) return res.status(404).json({ error: 'Session not found' })
+  const updated = await prisma.whatsappSession.update({
+    where: { id: session.id },
+    data: { learnMode },
+  })
+  res.json({ learnMode: updated.learnMode })
+})
+
+// List learned patterns per brand
+waRouter.get('/learned-patterns/:brandId', async (req, res) => {
+  const patterns = await prisma.learnedPattern.findMany({
+    where: { brandId: req.params.brandId },
+    orderBy: { frequency: 'desc' },
+    take: 50,
+  })
+  res.json(patterns)
+})
+
+// Delete a learned pattern
+waRouter.delete('/learned-patterns/:id', async (req, res) => {
+  await prisma.learnedPattern.delete({ where: { id: req.params.id } })
+  res.json({ success: true })
+})

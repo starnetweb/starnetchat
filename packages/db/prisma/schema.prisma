@@ -36,6 +36,7 @@ model Brand {
   quickReplies        QuickReply[]
   cannedResponses     CannedResponse[]
   scheduledBroadcasts ScheduledBroadcast[]
+  learnedPatterns     LearnedPattern[]
 
   @@map("brands")
 }
@@ -52,6 +53,8 @@ model WhatsappSession {
   aiEnabled Boolean       @default(true)
   // AI model: "claude" = Anthropic claude-haiku-4-5 | "gpt" = OpenAI gpt-4.1-nano
   aiModel   String        @default("claude")
+  // Learn mode: when true, AI stays silent and human replies are stored as training examples
+  learnMode Boolean       @default(false)
   createdAt DateTime      @default(now())
   updatedAt DateTime      @updatedAt
 
@@ -339,6 +342,24 @@ model CannedResponse {
   brand     Brand @relation(fields: [brandId], references: [id], onDelete: Cascade)
 
   @@map("canned_responses")
+}
+
+// ─── Learned Patterns ─────────────────────────────────────────────────────────
+// Captured from human agent replies during Learn mode. Injected as few-shot
+// examples into the AI prompt when Active mode is on.
+
+model LearnedPattern {
+  id           String   @id @default(cuid())
+  brandId      String
+  userMessage  String   @db.Text  // what the customer asked
+  agentReply   String   @db.Text  // how the human agent replied
+  frequency    Int      @default(1) // how many times this pattern was seen
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  brand        Brand @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  @@map("learned_patterns")
 }
 
 // ─── Scheduled Broadcasts ─────────────────────────────────────────────────────

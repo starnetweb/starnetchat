@@ -107,9 +107,24 @@ export async function generateAIResponse(
     }
   }
 
+  // Fetch top learned patterns for this brand (human-agent examples)
+  const learnedPatterns = await prisma.learnedPattern.findMany({
+    where: { brandId },
+    orderBy: { frequency: 'desc' },
+    take: 10,
+    select: { userMessage: true, agentReply: true },
+  })
+
+  const learnedContext = learnedPatterns.length > 0
+    ? '\n\nLEARNED EXAMPLES (real replies from your human support team — match this tone and style):\n' +
+      learnedPatterns
+        .map((p, i) => `Example ${i + 1}:\nCustomer: ${p.userMessage}\nAgent: ${p.agentReply}`)
+        .join('\n\n')
+    : ''
+
   const systemPrompt = `${brand.systemPrompt}
 
-${knowledgeContext ? `KNOWLEDGE BASE:\n${knowledgeContext}` : ''}${labelContext}
+${knowledgeContext ? `KNOWLEDGE BASE:\n${knowledgeContext}` : ''}${labelContext}${learnedContext}
 
 Always respond in ${brand.language === 'en' ? 'English' : brand.language}.
 Keep responses concise and helpful. If you cannot answer, politely say so and offer to escalate.`
