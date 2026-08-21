@@ -376,16 +376,19 @@ export async function handleHumanAgentReply(msg: proto.IWebMessageInfo) {
   })
   if (existing) return
 
-  // Save as human agent outbound message
-  await prisma.message.create({
-    data: {
-      conversationId: conversation.id,
-      direction: 'OUTBOUND',
-      role: 'ASSISTANT',
-      content: text,
-      whatsappMsgId: msg.key.id,
-    },
-  })
+  // Save as human agent outbound message and bump conversation updatedAt
+  await Promise.all([
+    prisma.message.create({
+      data: {
+        conversationId: conversation.id,
+        direction: 'OUTBOUND',
+        role: 'ASSISTANT',
+        content: text,
+        whatsappMsgId: msg.key.id,
+      },
+    }),
+    prisma.conversation.update({ where: { id: conversation.id }, data: { updatedAt: new Date() } }),
+  ])
 
   console.log(`[HUMAN] CS reply captured for conversation ${conversation.id}: "${text.slice(0, 60)}"`)
   emit('message:new', { conversationId: conversation.id, direction: 'OUTBOUND', content: text })
