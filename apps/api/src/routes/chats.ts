@@ -213,6 +213,66 @@ chatRouter.post('/conversations/:id/send-csat', async (req, res) => {
   res.json({ success: true })
 })
 
+// Manually trigger no-reply follow-ups for all dropped chats
+chatRouter.post('/trigger-followup', async (req, res) => {
+  const sock = getSocket()
+  if (!sock) return res.status(503).json({ error: 'WhatsApp not connected' })
+
+  const HOURS = req.body.hours ?? 1  // default: chats silent for 1+ hour (manual is more aggressive)
+  const cutoff = new Date(Date.now() - HOURS * 60 * 60 * 1000)
+
+  const candidates = await prisma.conversation.findMany({
+    where: {
+      status: 'OPEN',
+      OR: [
+        { lastCustomerMsgAt: { lte: cutoff } },
+        { lastCustomerMsgAt: null, openedAt: { lte: cutoff } },
+      ],
+    } as any,
+    include: {
+      contact: true,
+      brand: { select: { name: true } },
+      messages: { orderBy: { sentAt: 'desc' }, take: 1, select: { direction: true, content: true } },
+    },
+  })
+
+  let sent = 0
+  const skipped: string[] = []
+
+  for (const conv of candidates) {
+    const lastMsg = conv.messages[0]
+    if (!lastMsg || lastMsg.direction !== 'OUTBOUND') { skipped.push(conv.id); continue }
+
+    const lc = lastMsg.content.toLowerCase()
+    if (
+      lc.includes('just checking in') ||
+      lc.includes('still interested') ||
+      lc.includes("haven't heard back") ||
+      lc.includes('review')
+    ) { skipped.push(conv.id); continue }
+
+    const jid = conv.contact.whatsappJid
+    const name = conv.contact.name ? ` ${conv.contact.name}` : ''
+    const msg =
+      `Hi${name}! We noticed we haven't heard back from you regarding ${conv.brand.name}.\n\n` +
+      `We are still here and happy to help — feel free to continue whenever you are ready.`
+
+    try {
+      await sock.sendMessage(jid, { text: msg })
+      await prisma.message.create({
+        data: { conversationId: conv.id, direction: 'OUTBOUND', role: 'ASSISTANT', content: msg },
+      })
+      await prisma.conversation.update({
+        where: { id: conv.id },
+        data: { noReplyFollowUpSent: true } as any,
+      })
+      sent++
+    } catch { skipped.push(conv.id) }
+  }
+
+  res.json({ sent, skipped: skipped.length, total: candidates.length })
+})
+
 // Unread counts per conversation
 chatRouter.get('/unread', async (req, res) => {
   const counts = await prisma.message.groupBy({

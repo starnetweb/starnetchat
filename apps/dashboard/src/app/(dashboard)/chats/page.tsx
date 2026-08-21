@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useSocket } from '@/lib/socket'
 import { formatDistanceToNow } from 'date-fns'
-import { Send, CheckCheck, StickyNote, Save, X, User, Paperclip, FileText, Bot, BotOff, FileSearch, Star, Tag } from 'lucide-react'
+import { Send, CheckCheck, StickyNote, Save, X, User, Paperclip, FileText, Bot, BotOff, FileSearch, Star, Tag, RefreshCw } from 'lucide-react'
 import Link from 'next/link'
 
 import { api } from '@/lib/api'
@@ -45,6 +45,7 @@ export default function ChatsPage() {
   const [summary, setSummary] = useState<string | null>(null)
   const [summaryLoading, setSummaryLoading] = useState(false)
   const [csatSending, setCsatSending] = useState(false)
+  const [followUpState, setFollowUpState] = useState<{ loading: boolean; result: string | null }>({ loading: false, result: null })
   const [attachFile, setAttachFile] = useState<File | null>(null)
   const [attachPreview, setAttachPreview] = useState<string | null>(null)
   const [aiTyping, setAiTyping] = useState(false)
@@ -161,6 +162,18 @@ export default function ChatsPage() {
     }
   }
 
+  async function triggerFollowUp() {
+    if (!confirm('Send a follow-up message to all open conversations where the customer has not replied to our last message?')) return
+    setFollowUpState({ loading: true, result: null })
+    try {
+      const res = await api.post('/chats/trigger-followup', { hours: 1 })
+      setFollowUpState({ loading: false, result: `Sent ${res.sent} follow-ups (${res.skipped} skipped)` })
+      setTimeout(() => setFollowUpState({ loading: false, result: null }), 5000)
+    } catch (err: any) {
+      setFollowUpState({ loading: false, result: 'Error: ' + err.message })
+    }
+  }
+
   async function saveNotes() {
     if (!selected) return
     setSavingNotes(true)
@@ -180,12 +193,26 @@ export default function ChatsPage() {
     <div className="flex h-full">
       {/* Conversation list */}
       <div className="w-80 border-r bg-white flex flex-col">
-        <div className="px-4 py-4 border-b font-semibold text-gray-900 flex items-center justify-between">
-          All Chats
-          {Object.values(unread).some((v) => v > 0) && (
-            <span className="text-xs bg-green-600 text-white px-2 py-0.5 rounded-full">
-              {Object.values(unread).reduce((a, b) => a + b, 0)} unread
-            </span>
+        <div className="px-4 py-3 border-b flex flex-col gap-2">
+          <div className="font-semibold text-gray-900 flex items-center justify-between">
+            All Chats
+            {Object.values(unread).some((v) => v > 0) && (
+              <span className="text-xs bg-green-600 text-white px-2 py-0.5 rounded-full">
+                {Object.values(unread).reduce((a, b) => a + b, 0)} unread
+              </span>
+            )}
+          </div>
+          <button
+            onClick={triggerFollowUp}
+            disabled={followUpState.loading}
+            className="w-full flex items-center justify-center gap-1.5 text-xs font-medium py-1.5 px-3 rounded-lg border border-orange-200 bg-orange-50 text-orange-700 hover:bg-orange-100 transition disabled:opacity-50"
+            title="Send a follow-up to all open chats where customer hasn't replied"
+          >
+            <RefreshCw size={11} className={followUpState.loading ? 'animate-spin' : ''} />
+            {followUpState.loading ? 'Sending...' : 'Follow Up Dropped Chats'}
+          </button>
+          {followUpState.result && (
+            <p className="text-xs text-center text-orange-600">{followUpState.result}</p>
           )}
         </div>
         <div className="flex-1 overflow-y-auto">
