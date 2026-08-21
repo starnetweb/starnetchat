@@ -1,13 +1,14 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { api } from '@/lib/api'
-import { MessageSquare, Users, CheckCircle2, TrendingUp, RefreshCw, BarChart3 } from 'lucide-react'
+import { MessageSquare, Users, CheckCircle2, TrendingUp, RefreshCw, BarChart3, Star, AlertTriangle, Tag } from 'lucide-react'
 
 interface Analytics {
   totals: {
     conversations: number
     openConversations: number
     resolvedConversations: number
+    escalatedConversations: number
     messages: number
     contacts: number
     newContactsThisWeek: number
@@ -15,17 +16,21 @@ interface Analytics {
   }
   dailyMessages: { date: string; inbound: number; outbound: number }[]
   brandBreakdown: { brand: string; conversations: number }[]
+  sentimentBreakdown: Record<string, number>
+  csat: { average: number | null; total: number; distribution: Record<string, number> }
+  aiLabelCounts: Record<string, number>
 }
 
 interface Brand { id: string; name: string }
+interface SLABreach { conversationId: string; brand: string; contact: string; minutesPending: number }
 
-function StatCard({ label, value, sub, icon: Icon, color }: { label: string; value: number; sub?: string; icon: any; color: string }) {
+function StatCard({ label, value, sub, icon: Icon, color }: { label: string; value: number | string; sub?: string; icon: any; color: string }) {
   return (
     <div className="card p-5">
       <div className="flex items-start justify-between">
         <div>
           <p className="text-sm text-gray-500">{label}</p>
-          <p className="text-2xl font-bold text-gray-900 mt-1">{value.toLocaleString()}</p>
+          <p className="text-2xl font-bold text-gray-900 mt-1">{typeof value === 'number' ? value.toLocaleString() : value}</p>
           {sub && <p className="text-xs text-gray-400 mt-0.5">{sub}</p>}
         </div>
         <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${color}`}>
@@ -36,11 +41,9 @@ function StatCard({ label, value, sub, icon: Icon, color }: { label: string; val
   )
 }
 
-// Simple bar chart using pure CSS/HTML (no external chart library needed)
 function BarChart({ data }: { data: { date: string; inbound: number; outbound: number }[] }) {
   const max = Math.max(...data.map((d) => d.inbound + d.outbound), 1)
   const last14 = data.slice(-14)
-
   return (
     <div className="flex items-end gap-1 h-32">
       {last14.map((d) => {
@@ -53,7 +56,6 @@ function BarChart({ data }: { data: { date: string; inbound: number; outbound: n
               <div style={{ height: `${inboundPct}%` }} className="bg-green-500" />
               <div style={{ height: `${100 - inboundPct}%` }} className="bg-blue-400" />
             </div>
-            {/* Tooltip */}
             <div className="absolute bottom-full mb-1 left-1/2 -translate-x-1/2 bg-gray-800 text-white text-xs rounded px-2 py-1 whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none z-10">
               {d.date.slice(5)}: {d.inbound}↓ {d.outbound}↑
             </div>
@@ -64,10 +66,18 @@ function BarChart({ data }: { data: { date: string; inbound: number; outbound: n
   )
 }
 
+const SENTIMENT_COLORS: Record<string, string> = {
+  positive: 'bg-green-500',
+  neutral: 'bg-gray-400',
+  negative: 'bg-orange-400',
+  angry: 'bg-red-500',
+}
+
 export default function AnalyticsPage() {
   const [brands, setBrands] = useState<Brand[]>([])
   const [selectedBrand, setSelectedBrand] = useState('')
   const [data, setData] = useState<Analytics | null>(null)
+  const [breaches, setBreaches] = useState<SLABreach[]>([])
   const [loading, setLoading] = useState(false)
 
   useEffect(() => { api.get('/brands').then(setBrands) }, [])
@@ -75,19 +85,26 @@ export default function AnalyticsPage() {
   async function load() {
     setLoading(true)
     const url = selectedBrand ? `/analytics?brandId=${selectedBrand}` : '/analytics'
-    const result = await api.get(url).catch(() => null)
+    const breachUrl = selectedBrand ? `/chats/sla-breaches?brandId=${selectedBrand}` : '/chats/sla-breaches'
+    const [result, breachResult] = await Promise.all([
+      api.get(url).catch(() => null),
+      api.get(breachUrl).catch(() => []),
+    ])
     setData(result)
+    setBreaches(breachResult || [])
     setLoading(false)
   }
 
   useEffect(() => { load() }, [selectedBrand])
+
+  const sentimentTotal = data ? Object.values(data.sentimentBreakdown).reduce((a, b) => a + b, 0) : 0
 
   return (
     <div className="p-6 max-w-5xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold text-gray-900 flex items-center gap-2"><BarChart3 size={20} /> Analytics</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Overview of conversations, messages and contacts</p>
+          <p className="text-sm text-gray-500 mt-0.5">Conversations, sentiment, CSAT, and SLA performance</p>
         </div>
         <div className="flex items-center gap-3">
           <select value={selectedBrand} onChange={(e) => setSelectedBrand(e.target.value)} className="input w-48 text-sm">
@@ -100,6 +117,23 @@ export default function AnalyticsPage() {
         </div>
       </div>
 
+      {/* SLA Breaches Alert */}
+      {breaches.length > 0 && (
+        <div className="bg-red-50 border border-red-200 rounded-xl p-4">
+          <div className="flex items-center gap-2 font-semibold text-red-700 mb-2">
+            <AlertTriangle size={16} /> {breaches.length} SLA Breach{breaches.length > 1 ? 'es' : ''} — Unanswered conversations
+          </div>
+          <div className="space-y-1">
+            {breaches.slice(0, 5).map((b) => (
+              <div key={b.conversationId} className="text-sm text-red-600">
+                {b.contact} ({b.brand}) — waiting {b.minutesPending} min
+              </div>
+            ))}
+            {breaches.length > 5 && <div className="text-xs text-red-400">+{breaches.length - 5} more</div>}
+          </div>
+        </div>
+      )}
+
       {data && (
         <>
           {/* Stat cards */}
@@ -107,7 +141,18 @@ export default function AnalyticsPage() {
             <StatCard label="Total Conversations" value={data.totals.conversations} sub={`${data.totals.conversationsThisWeek} this week`} icon={MessageSquare} color="bg-green-100 text-green-700" />
             <StatCard label="Open Now" value={data.totals.openConversations} icon={TrendingUp} color="bg-blue-100 text-blue-700" />
             <StatCard label="Resolved" value={data.totals.resolvedConversations} icon={CheckCircle2} color="bg-gray-100 text-gray-600" />
+            <StatCard label="Escalated" value={data.totals.escalatedConversations} icon={AlertTriangle} color="bg-red-100 text-red-600" />
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
             <StatCard label="Total Contacts" value={data.totals.contacts} sub={`+${data.totals.newContactsThisWeek} this week`} icon={Users} color="bg-purple-100 text-purple-700" />
+            <StatCard
+              label="CSAT Score"
+              value={data.csat.average !== null ? `${data.csat.average}/5` : 'No data'}
+              sub={`${data.csat.total} ratings`}
+              icon={Star}
+              color="bg-yellow-100 text-yellow-700"
+            />
+            <StatCard label="Total Messages" value={data.totals.messages} icon={MessageSquare} color="bg-indigo-100 text-indigo-700" />
           </div>
 
           {/* Daily messages chart */}
@@ -123,6 +168,76 @@ export default function AnalyticsPage() {
               <span>Today</span>
             </div>
           </div>
+
+          {/* Sentiment + CSAT row */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Sentiment breakdown */}
+            <div className="card p-6">
+              <h2 className="font-semibold text-gray-900 mb-4">Sentiment Breakdown</h2>
+              {sentimentTotal === 0 ? (
+                <p className="text-sm text-gray-400">No sentiment data yet</p>
+              ) : (
+                <div className="space-y-3">
+                  {['positive', 'neutral', 'negative', 'angry'].map((s) => {
+                    const count = data.sentimentBreakdown[s] || 0
+                    const pct = sentimentTotal ? Math.round((count / sentimentTotal) * 100) : 0
+                    return (
+                      <div key={s}>
+                        <div className="flex justify-between text-sm mb-1">
+                          <span className="capitalize text-gray-700">{s}</span>
+                          <span className="text-gray-500">{count} ({pct}%)</span>
+                        </div>
+                        <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                          <div className={`h-full rounded-full transition-all ${SENTIMENT_COLORS[s]}`} style={{ width: `${pct}%` }} />
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* CSAT distribution */}
+            <div className="card p-6">
+              <h2 className="font-semibold text-gray-900 mb-4">CSAT Distribution</h2>
+              {data.csat.total === 0 ? (
+                <p className="text-sm text-gray-400">No CSAT ratings yet. Send surveys when resolving conversations.</p>
+              ) : (
+                <div className="space-y-2">
+                  {['5', '4', '3', '2', '1'].map((score) => {
+                    const count = data.csat.distribution[score] || 0
+                    const pct = data.csat.total ? Math.round((count / data.csat.total) * 100) : 0
+                    return (
+                      <div key={score} className="flex items-center gap-3">
+                        <span className="text-sm text-gray-600 w-4">{score}</span>
+                        <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
+                          <div className="h-full bg-yellow-400 rounded-full" style={{ width: `${pct}%` }} />
+                        </div>
+                        <span className="text-xs text-gray-400 w-8 text-right">{count}</span>
+                      </div>
+                    )
+                  })}
+                  <p className="text-sm font-semibold text-gray-700 mt-2">Average: {data.csat.average}/5</p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* AI Labels */}
+          {Object.keys(data.aiLabelCounts).length > 0 && (
+            <div className="card p-6">
+              <h2 className="font-semibold text-gray-900 mb-4 flex items-center gap-2"><Tag size={16} /> AI Label Breakdown</h2>
+              <div className="flex flex-wrap gap-2">
+                {Object.entries(data.aiLabelCounts)
+                  .sort((a, b) => b[1] - a[1])
+                  .map(([label, count]) => (
+                    <span key={label} className="px-3 py-1.5 rounded-full bg-teal-50 text-teal-700 text-sm font-medium">
+                      {label} <span className="text-teal-400 ml-1">{count}</span>
+                    </span>
+                  ))}
+              </div>
+            </div>
+          )}
 
           {/* Brand breakdown */}
           {data.brandBreakdown.length > 0 && (

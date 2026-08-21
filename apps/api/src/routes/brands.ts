@@ -37,17 +37,18 @@ brandRouter.post('/', async (req, res) => {
 })
 
 brandRouter.patch('/:id', async (req, res) => {
-  const { name, systemPrompt, keywords, isActive, language } = req.body
+  const { name, systemPrompt, keywords, isActive, language, slaMinutes, reEngageDays, webhookUrl, slackWebhookUrl } = req.body
   const data: any = {}
   if (name !== undefined) data.name = name
   if (systemPrompt !== undefined) data.systemPrompt = systemPrompt
   if (keywords !== undefined) data.keywords = keywords
   if (isActive !== undefined) data.isActive = isActive
   if (language !== undefined) data.language = language
+  if (slaMinutes !== undefined) data.slaMinutes = Number(slaMinutes)
+  if (reEngageDays !== undefined) data.reEngageDays = Number(reEngageDays)
+  if (webhookUrl !== undefined) data.webhookUrl = webhookUrl || null
+  if (slackWebhookUrl !== undefined) data.slackWebhookUrl = slackWebhookUrl || null
 
-  const brand = await prisma.brand.update({
-    where: { id: req.params.id },
-    data,
-  })
+  const brand = await prisma.brand.update({ where: { id: req.params.id }, data })
   res.json(brand)
 })

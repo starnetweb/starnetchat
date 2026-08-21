@@ -70,13 +70,62 @@ ${brandList}`,
   }
 }
 
+// ── Sentiment Analysis ────────────────────────────────────────────────────────
+
+export async function analyzeSentiment(text: string): Promise<'positive' | 'neutral' | 'negative' | 'angry'> {
+  try {
+    const response = await getAnthropicClient().messages.create({
+      model: 'claude-haiku-4-5',
+      max_tokens: 20,
+      system: 'Classify the sentiment of the customer message. Reply with exactly one word: positive, neutral, negative, or angry. No explanation.',
+      messages: [{ role: 'user', content: text }],
+    })
+    const raw = (response.content[0] as Anthropic.TextBlock).text.trim().toLowerCase()
+    if (['positive', 'neutral', 'negative', 'angry'].includes(raw)) return raw as any
+    return 'neutral'
+  } catch { return 'neutral' }
+}
+
+// ── AI Auto-Labeling ──────────────────────────────────────────────────────────
+
+const ALL_AI_LABELS = ['AI-interested', 'AI-price-inquiry', 'AI-complaint', 'AI-followup', 'AI-resolved', 'AI-unresolved', 'AI-urgent', 'AI-new-lead']
+
+export async function autoLabelConversation(messages: { role: string; content: string }[]): Promise<string[]> {
+  try {
+    const transcript = messages.slice(-10).map((m) => `${m.role === 'USER' ? 'Customer' : 'Agent'}: ${m.content}`).join('\n')
+    const response = await getAnthropicClient().messages.create({
+      model: 'claude-haiku-4-5',
+      max_tokens: 80,
+      system: `Analyze this customer support conversation and return a JSON array of applicable labels from this list: ${ALL_AI_LABELS.join(', ')}.
+Return ONLY a JSON array, e.g. ["AI-interested","AI-price-inquiry"]. Empty array if none apply. No explanation.`,
+      messages: [{ role: 'user', content: transcript }],
+    })
+    const raw = (response.content[0] as Anthropic.TextBlock).text.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim()
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed) ? parsed.filter((l: string) => ALL_AI_LABELS.includes(l)) : []
+  } catch { return [] }
+}
+
+// ── Conversation Summary ──────────────────────────────────────────────────────
+
+export async function summarizeConversation(messages: { role: string; content: string }[]): Promise<string> {
+  const transcript = messages.map((m) => `${m.role === 'USER' ? 'Customer' : 'Agent'}: ${m.content}`).join('\n')
+  const response = await getAnthropicClient().messages.create({
+    model: 'claude-haiku-4-5',
+    max_tokens: 300,
+    system: 'Summarize this customer support conversation in 3-5 bullet points. Focus on: what the customer needed, what was resolved, and any follow-up required. Plain text, no emojis.',
+    messages: [{ role: 'user', content: transcript }],
+  })
+  return (response.content[0] as Anthropic.TextBlock).text.trim()
+}
+
 // ── Generate AI Response ──────────────────────────────────────────────────────
 
 export async function generateAIResponse(
   brandId: string,
   conversationId: string,
   userMessage: string
-): Promise<string> {
+): Promise<{ text: string; lowConfidence: boolean }> {
   const [brand, conversation, aiModel] = await Promise.all([
     prisma.brand.findUnique({ where: { id: brandId } }),
     prisma.conversation.findUnique({ where: { id: conversationId } }),
@@ -126,16 +175,22 @@ export async function generateAIResponse(
 
 ${knowledgeContext ? `KNOWLEDGE BASE:\n${knowledgeContext}` : ''}${labelContext}${learnedContext}
 
-Always respond in ${brand.language === 'en' ? 'English' : brand.language}.
-Keep responses concise and helpful. If you cannot answer, politely say so and offer to escalate.
+Detect the language the customer is writing in and reply in that same language (e.g. if they write in Yoruba, reply in Yoruba; Pidgin, reply in Pidgin). Override this only if the brand language is explicitly required.
+Keep responses concise and helpful. If you genuinely cannot answer, reply with exactly: [HANDOFF] followed by your message to the customer.
 IMPORTANT: Never use emojis in any response. Plain text only.`
 
   console.log(`[AI] Using model: ${aiModel}`)
 
+  let rawText: string
   if (aiModel === 'gpt') {
-    return generateWithOpenAI(systemPrompt, history, userMessage)
+    rawText = await generateWithOpenAI(systemPrompt, history, userMessage)
+  } else {
+    rawText = await generateWithClaude(systemPrompt, history, userMessage)
   }
-  return generateWithClaude(systemPrompt, history, userMessage)
+
+  const lowConfidence = rawText.startsWith('[HANDOFF]')
+  const text = lowConfidence ? rawText.replace('[HANDOFF]', '').trim() : rawText
+  return { text, lowConfidence }
 }
 
 async function generateWithClaude(

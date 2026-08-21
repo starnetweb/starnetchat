@@ -80,12 +80,14 @@ async function start() {
   const { initWhatsappSessions } = await import('@wac/whatsapp')
 
   const { startScheduledBroadcastRunner } = await import('./scheduledBroadcastRunner')
+  const { startReEngagementRunner } = await import('./reEngagementRunner')
 
   httpServer.listen(PORT, async () => {
     console.log(`API running on port ${PORT}`)
     await initQueue()
     await initWhatsappSessions()
     startScheduledBroadcastRunner()
+    startReEngagementRunner()
 
     // Auto-connect WhatsApp on startup
     const { connect, initEventBus } = await import('@wac/whatsapp')

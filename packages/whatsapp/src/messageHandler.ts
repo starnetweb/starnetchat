@@ -1,6 +1,6 @@
 import { proto } from '@whiskeysockets/baileys'
 import { prisma } from '@wac/db'
-import { generateAIResponse, detectBrand } from '@wac/ai'
+import { generateAIResponse, detectBrand, analyzeSentiment, autoLabelConversation } from '@wac/ai'
 import { scheduleAutomations } from '@wac/queue'
 import { EventEmitter } from 'events'
 
@@ -133,18 +133,54 @@ export async function handleIncomingMessage(sock: any, msg: proto.IWebMessageInf
     })
   }
 
-  // Store inbound message
-  await prisma.message.create({
-    data: {
-      conversationId: conversation.id,
-      direction: 'INBOUND',
-      role: 'USER',
-      content: text,
-      whatsappMsgId: msg.key.id,
-    },
-  })
+  // Store inbound message + track lastCustomerMsgAt
+  await Promise.all([
+    prisma.message.create({
+      data: {
+        conversationId: conversation.id,
+        direction: 'INBOUND',
+        role: 'USER',
+        content: text,
+        whatsappMsgId: msg.key.id,
+      },
+    }),
+    prisma.conversation.update({
+      where: { id: conversation.id },
+      data: { lastCustomerMsgAt: new Date() },
+    }),
+  ])
 
   emit('message:new', { conversationId: conversation.id, direction: 'INBOUND', content: text })
+
+  // ── CSAT detection: if we sent a CSAT survey and customer replies with 1-5 ──
+  const convFull = await prisma.conversation.findUnique({ where: { id: conversation.id } })
+  if (convFull?.csatSent && !convFull.csatScore) {
+    const score = parseInt(text.trim())
+    if (score >= 1 && score <= 5) {
+      await prisma.conversation.update({
+        where: { id: conversation.id },
+        data: { csatScore: score },
+      })
+      console.log(`[CSAT] Score ${score} recorded for conversation ${conversation.id}`)
+      emit('csat:received', { conversationId: conversation.id, score })
+      // Fire webhook
+      await fireWebhook(conversation.brandId, 'csat_received', { conversationId: conversation.id, score, contact: phone })
+      return // Don't process further — this was a CSAT reply
+    }
+  }
+
+  // ── Sentiment analysis (background, non-blocking) ────────────────────────
+  analyzeSentiment(text).then(async (sentiment) => {
+    await prisma.conversation.update({ where: { id: conversation.id }, data: { sentiment } })
+    emit('conversation:updated', { conversationId: conversation.id, sentiment })
+    // Auto-escalate if angry
+    if (sentiment === 'angry') {
+      await prisma.conversation.update({ where: { id: conversation.id }, data: { status: 'ESCALATED' as any } })
+      emit('conversation:escalated', { conversationId: conversation.id, reason: 'Angry sentiment detected' })
+      await fireWebhook(conversation.brandId, 'escalation', { conversationId: conversation.id, reason: 'Angry sentiment detected', contact: phone })
+      console.log(`[SENTIMENT] Angry detected — conversation ${conversation.id} auto-escalated`)
+    }
+  }).catch(() => {})
 
   // ── Skip AI for conversations not started by AI (pre-existing chats) ──────
   if (!(conversation as any).aiManaged) {
@@ -224,8 +260,8 @@ export async function handleIncomingMessage(sock: any, msg: proto.IWebMessageInf
 
   // Generate AI response
   console.log(`[AI] Generating response for brand ${brandId!}...`)
-  const response = await generateAIResponse(brandId!, conversation.id, text)
-  console.log(`[AI] Response: "${response.slice(0, 80)}..."`)
+  const { text: response, lowConfidence } = await generateAIResponse(brandId!, conversation.id, text)
+  console.log(`[AI] Response (lowConfidence=${lowConfidence}): "${response.slice(0, 80)}..."`)
 
   // Stop typing indicator then send
   await sock.sendPresenceUpdate('paused', jid)
@@ -243,9 +279,57 @@ export async function handleIncomingMessage(sock: any, msg: proto.IWebMessageInf
 
   emit('message:new', { conversationId: conversation.id, direction: 'OUTBOUND', content: response })
 
+  // ── AI confidence handoff: pause AI for this conversation if unsure ───────
+  if (lowConfidence) {
+    await prisma.conversation.update({
+      where: { id: conversation.id },
+      data: { aiManaged: false } as any,
+    })
+    emit('conversation:handoff', { conversationId: conversation.id, reason: 'Low confidence — AI paused, human needed' })
+    await fireWebhook(brandId!, 'handoff', { conversationId: conversation.id, contact: phone, lastMessage: text })
+    console.log(`[AI] Low confidence — conversation ${conversation.id} handed off to human`)
+  }
+
+  // ── Auto-label conversation in background ─────────────────────────────────
+  const allMessages = await prisma.message.findMany({
+    where: { conversationId: conversation.id },
+    orderBy: { sentAt: 'asc' },
+    take: 20,
+    select: { role: true, content: true },
+  })
+  autoLabelConversation(allMessages).then(async (labels) => {
+    if (labels.length) {
+      await prisma.conversation.update({ where: { id: conversation.id }, data: { aiLabels: labels } as any })
+      emit('conversation:updated', { conversationId: conversation.id, aiLabels: labels })
+    }
+  }).catch(() => {})
+
   if (isNew) {
     await scheduleAutomations(brandId!, conversation.id, 'CONVERSATION_OPENED')
+    // Fire new conversation webhook
+    await fireWebhook(brandId!, 'new_conversation', { conversationId: conversation.id, contact: phone })
   }
+}
+
+// ── Webhook utility ───────────────────────────────────────────────────────────
+async function fireWebhook(brandId: string, event: string, payload: any) {
+  try {
+    const brand = await prisma.brand.findUnique({ where: { id: brandId }, select: { webhookUrl: true, slackWebhookUrl: true, name: true } })
+    if (!brand) return
+
+    const body = JSON.stringify({ event, brand: brand.name, timestamp: new Date().toISOString(), ...payload })
+    const headers = { 'Content-Type': 'application/json' }
+
+    if (brand.webhookUrl) {
+      fetch(brand.webhookUrl, { method: 'POST', headers, body }).catch(() => {})
+    }
+    if (brand.slackWebhookUrl) {
+      const slackBody = JSON.stringify({
+        text: `*[${brand.name}]* ${event.replace(/_/g, ' ').toUpperCase()}\n${Object.entries(payload).map(([k, v]) => `• ${k}: ${v}`).join('\n')}`,
+      })
+      fetch(brand.slackWebhookUrl, { method: 'POST', headers, body: slackBody }).catch(() => {})
+    }
+  } catch { }
 }
 
 /**

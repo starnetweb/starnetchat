@@ -23,6 +23,14 @@ model Brand {
   keywords          String[]
   language          String   @default("en")
   isActive          Boolean  @default(true)
+  // SLA: minutes before an unanswered conversation is flagged
+  slaMinutes        Int      @default(60)
+  // Re-engagement: days of inactivity before auto follow-up
+  reEngageDays      Int      @default(7)
+  // Webhook URL to POST events to (new conv, escalation, CSAT)
+  webhookUrl        String?
+  // Slack incoming webhook URL
+  slackWebhookUrl   String?
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
@@ -106,6 +114,21 @@ model Conversation {
 
   // WhatsApp Business labels applied to this chat (e.g. "Follow Up", "Project Delivered")
   labels      String[]   @default([])
+  // AI-generated labels (e.g. "AI-interested", "AI-complaint", "AI-followup")
+  aiLabels    String[]   @default([])
+
+  // Sentiment detected from latest customer message: positive|neutral|negative|angry
+  sentiment   String?
+
+  // Timestamp of last inbound message — used for SLA and re-engagement checks
+  lastCustomerMsgAt DateTime?
+
+  // CSAT tracking
+  csatSent    Boolean    @default(false)
+  csatScore   Int?       // 1–5 rating from customer
+
+  // AI-generated summary cached here
+  summaryText String?    @db.Text
 
   // AI management flag — false means AI will not respond to this conversation
   aiManaged   Boolean    @default(false)

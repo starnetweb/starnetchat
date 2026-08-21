@@ -75,11 +75,50 @@ analyticsRouter.get('/', async (req, res) => {
   const brandNames = await prisma.brand.findMany({ select: { id: true, name: true } })
   const brandMap = Object.fromEntries(brandNames.map((b) => [b.id, b.name]))
 
+  // Sentiment breakdown
+  const sentimentGroups = await prisma.conversation.groupBy({
+    by: ['sentiment'],
+    where: { ...brandFilter, sentiment: { not: null } },
+    _count: { id: true },
+  })
+  const sentimentBreakdown: Record<string, number> = { positive: 0, neutral: 0, negative: 0, angry: 0 }
+  for (const s of sentimentGroups) {
+    if (s.sentiment) sentimentBreakdown[s.sentiment] = s._count.id
+  }
+
+  // CSAT scores
+  const csatConvs = await prisma.conversation.findMany({
+    where: { ...brandFilter, csatScore: { not: null } },
+    select: { csatScore: true },
+  })
+  const csatScores = csatConvs.map((c: any) => c.csatScore as number)
+  const csatAvg = csatScores.length ? Math.round((csatScores.reduce((a: number, b: number) => a + b, 0) / csatScores.length) * 10) / 10 : null
+  const csatDistribution: Record<string, number> = { '1': 0, '2': 0, '3': 0, '4': 0, '5': 0 }
+  for (const s of csatScores) csatDistribution[String(s)] = (csatDistribution[String(s)] || 0) + 1
+
+  // AI label breakdown
+  const aiLabeledConvs = await prisma.conversation.findMany({
+    where: brandFilter,
+    select: { aiLabels: true },
+  })
+  const aiLabelCounts: Record<string, number> = {}
+  for (const c of aiLabeledConvs) {
+    for (const label of (c as any).aiLabels || []) {
+      aiLabelCounts[label] = (aiLabelCounts[label] || 0) + 1
+    }
+  }
+
+  // Escalated conversations
+  const escalatedConversations = await prisma.conversation.count({
+    where: { ...brandFilter, status: 'ESCALATED' },
+  })
+
   res.json({
     totals: {
       conversations: totalConversations,
       openConversations,
       resolvedConversations,
+      escalatedConversations,
       messages: totalMessages,
       contacts: totalContacts,
       newContactsThisWeek,
@@ -90,5 +129,8 @@ analyticsRouter.get('/', async (req, res) => {
       brand: brandMap[b.brandId] || b.brandId,
       conversations: b._count.id,
     })),
+    sentimentBreakdown,
+    csat: { average: csatAvg, total: csatScores.length, distribution: csatDistribution },
+    aiLabelCounts,
   })
 })

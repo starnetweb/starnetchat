@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import { prisma } from '@wac/db'
 import { getSocket } from '@wac/whatsapp'
+import { summarizeConversation } from '@wac/ai'
 import multer from 'multer'
 import path from 'path'
 import fs from 'fs'
@@ -148,6 +149,66 @@ chatRouter.post('/conversations/:id/read', async (req, res) => {
   await prisma.message.updateMany({
     where: { conversationId: req.params.id, direction: 'INBOUND', isRead: false },
     data: { isRead: true },
+  })
+  res.json({ success: true })
+})
+
+// Generate (or return cached) AI summary for a conversation
+chatRouter.post('/conversations/:id/summary', async (req, res) => {
+  const messages = await prisma.message.findMany({
+    where: { conversationId: req.params.id },
+    orderBy: { sentAt: 'asc' },
+    select: { role: true, content: true },
+  })
+  if (!messages.length) return res.status(400).json({ error: 'No messages to summarize' })
+  const summary = await summarizeConversation(messages)
+  await prisma.conversation.update({ where: { id: req.params.id }, data: { summaryText: summary } as any })
+  res.json({ summary })
+})
+
+// Get SLA-breached open conversations (no outbound reply within brand slaMinutes)
+chatRouter.get('/sla-breaches', async (req, res) => {
+  const { brandId } = req.query
+  const brands = await prisma.brand.findMany({
+    where: brandId ? { id: brandId as string } : {},
+    select: { id: true, name: true, slaMinutes: true },
+  })
+
+  const breaches: any[] = []
+  for (const brand of brands) {
+    const cutoff = new Date(Date.now() - brand.slaMinutes * 60 * 1000)
+    const convs = await prisma.conversation.findMany({
+      where: { brandId: brand.id, status: 'OPEN', lastCustomerMsgAt: { lte: cutoff } },
+      include: { contact: true, messages: { where: { direction: 'OUTBOUND' }, orderBy: { sentAt: 'desc' }, take: 1 } },
+    })
+    for (const c of convs) {
+      const lastOut = c.messages[0]?.sentAt
+      if (!lastOut || lastOut < cutoff) {
+        const minutesPending = Math.floor((Date.now() - (c.lastCustomerMsgAt as any).getTime()) / 60000)
+        breaches.push({ conversationId: c.id, brand: brand.name, contact: c.contact.phone, minutesPending })
+      }
+    }
+  }
+  res.json(breaches)
+})
+
+// Send CSAT survey for a resolved conversation
+chatRouter.post('/conversations/:id/send-csat', async (req, res) => {
+  const conversation = await prisma.conversation.findUnique({
+    where: { id: req.params.id },
+    include: { contact: true },
+  })
+  if (!conversation) return res.status(404).json({ error: 'Not found' })
+  if ((conversation as any).csatSent) return res.status(400).json({ error: 'CSAT already sent' })
+
+  const sock = getSocket()
+  if (!sock) return res.status(503).json({ error: 'WhatsApp not connected' })
+
+  const csatMsg = 'How would you rate our support today? Please reply with a number from 1 to 5 (1 = poor, 5 = excellent).'
+  await sock.sendMessage(conversation.contact.whatsappJid, { text: csatMsg })
+  await prisma.conversation.update({ where: { id: req.params.id }, data: { csatSent: true } as any })
+  await prisma.message.create({
+    data: { conversationId: req.params.id, direction: 'OUTBOUND', role: 'ASSISTANT', content: csatMsg },
   })
   res.json({ success: true })
 })

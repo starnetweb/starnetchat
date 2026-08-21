@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useSocket } from '@/lib/socket'
 import { formatDistanceToNow } from 'date-fns'
-import { Send, CheckCheck, StickyNote, Save, X, User, Paperclip, FileText, Bot, BotOff } from 'lucide-react'
+import { Send, CheckCheck, StickyNote, Save, X, User, Paperclip, FileText, Bot, BotOff, FileSearch, Star, Tag } from 'lucide-react'
 import Link from 'next/link'
 
 import { api } from '@/lib/api'
@@ -42,6 +42,9 @@ export default function ChatsPage() {
   const [notes, setNotes] = useState('')
   const [savingNotes, setSavingNotes] = useState(false)
   const [showNotes, setShowNotes] = useState(false)
+  const [summary, setSummary] = useState<string | null>(null)
+  const [summaryLoading, setSummaryLoading] = useState(false)
+  const [csatSending, setCsatSending] = useState(false)
   const [attachFile, setAttachFile] = useState<File | null>(null)
   const [attachPreview, setAttachPreview] = useState<string | null>(null)
   const [aiTyping, setAiTyping] = useState(false)
@@ -248,6 +251,32 @@ export default function ChatsPage() {
                 >
                   <StickyNote size={12} /> Notes
                 </button>
+                <button
+                  onClick={async () => {
+                    setSummaryLoading(true)
+                    setSummary(null)
+                    const res = await api.post(`/chats/conversations/${selected.id}/summary`, {}).catch(() => null)
+                    setSummary(res?.summary || 'Could not generate summary.')
+                    setSummaryLoading(false)
+                  }}
+                  disabled={summaryLoading}
+                  className="btn-secondary text-xs py-1.5 px-3 flex items-center gap-1"
+                  title="Generate AI summary of this conversation"
+                >
+                  <FileSearch size={12} /> {summaryLoading ? '...' : 'Summary'}
+                </button>
+                <button
+                  onClick={async () => {
+                    setCsatSending(true)
+                    await api.post(`/chats/conversations/${selected.id}/send-csat`, {}).catch(() => {})
+                    setCsatSending(false)
+                  }}
+                  disabled={csatSending || (selected as any).csatSent}
+                  className="btn-secondary text-xs py-1.5 px-3 flex items-center gap-1"
+                  title={(selected as any).csatSent ? 'CSAT survey already sent' : 'Send satisfaction survey to customer'}
+                >
+                  <Star size={12} /> {(selected as any).csatSent ? `CSAT ${(selected as any).csatScore ? (selected as any).csatScore+'/5' : 'Sent'}` : 'CSAT'}
+                </button>
               </div>
             </div>
 
@@ -268,6 +297,38 @@ export default function ChatsPage() {
                     <X size={11} /> Close
                   </button>
                 </div>
+              </div>
+            )}
+
+            {/* AI Summary panel */}
+            {summary && (
+              <div className="bg-indigo-50 border-b border-indigo-100 px-5 py-3">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs font-semibold text-indigo-700 flex items-center gap-1"><FileSearch size={11} /> AI Summary</span>
+                  <button onClick={() => setSummary(null)} className="text-indigo-400 hover:text-indigo-600"><X size={12} /></button>
+                </div>
+                <p className="text-sm text-indigo-800 whitespace-pre-line">{summary}</p>
+              </div>
+            )}
+
+            {/* AI Labels */}
+            {((selected as any).aiLabels?.length > 0 || (selected as any).sentiment) && (
+              <div className="border-b border-gray-100 px-5 py-2 flex flex-wrap items-center gap-1.5">
+                {(selected as any).sentiment && (
+                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                    (selected as any).sentiment === 'angry' ? 'bg-red-100 text-red-700' :
+                    (selected as any).sentiment === 'negative' ? 'bg-orange-100 text-orange-700' :
+                    (selected as any).sentiment === 'positive' ? 'bg-green-100 text-green-700' :
+                    'bg-gray-100 text-gray-600'
+                  }`}>
+                    {(selected as any).sentiment}
+                  </span>
+                )}
+                {((selected as any).aiLabels || []).map((label: string) => (
+                  <span key={label} className="text-xs px-2 py-0.5 rounded-full bg-teal-50 text-teal-700 font-medium flex items-center gap-1">
+                    <Tag size={9} /> {label}
+                  </span>
+                ))}
               </div>
             )}
 

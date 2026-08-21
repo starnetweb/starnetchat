@@ -11,6 +11,10 @@ interface Brand {
   keywords: string[]
   isActive: boolean
   systemPrompt?: string
+  slaMinutes?: number
+  reEngageDays?: number
+  webhookUrl?: string
+  slackWebhookUrl?: string
   _count?: { conversations: number }
 }
 
@@ -51,6 +55,10 @@ export default function BrandsPage() {
   const [editSystemPrompt, setEditSystemPrompt] = useState('')
   const [editKeywords, setEditKeywords] = useState('')
   const [editActive, setEditActive] = useState(true)
+  const [editSlaMinutes, setEditSlaMinutes] = useState(60)
+  const [editReEngageDays, setEditReEngageDays] = useState(7)
+  const [editWebhookUrl, setEditWebhookUrl] = useState('')
+  const [editSlackWebhookUrl, setEditSlackWebhookUrl] = useState('')
   const [saving, setSaving] = useState(false)
   const [saveMsg, setSaveMsg] = useState('')
 
@@ -102,6 +110,10 @@ export default function BrandsPage() {
     setEditSystemPrompt(brand.systemPrompt || '')
     setEditKeywords(brand.keywords.join(', '))
     setEditActive(brand.isActive)
+    setEditSlaMinutes(brand.slaMinutes ?? 60)
+    setEditReEngageDays(brand.reEngageDays ?? 7)
+    setEditWebhookUrl(brand.webhookUrl || '')
+    setEditSlackWebhookUrl(brand.slackWebhookUrl || '')
     setSaveMsg('')
   }
 
@@ -121,6 +133,10 @@ export default function BrandsPage() {
         systemPrompt: editSystemPrompt.trim(),
         keywords,
         isActive: editActive,
+        slaMinutes: editSlaMinutes,
+        reEngageDays: editReEngageDays,
+        webhookUrl: editWebhookUrl.trim() || null,
+        slackWebhookUrl: editSlackWebhookUrl.trim() || null,
       })
       setBrands(prev => prev.map(b => b.id === editingBrand.id
         ? { ...b, name: editName.trim(), systemPrompt: editSystemPrompt.trim(), keywords, isActive: editActive }
@@ -325,6 +341,32 @@ export default function BrandsPage() {
                   onChange={(e) => setEditSystemPrompt(e.target.value)}
                   placeholder={`e.g. You are a helpful assistant for BlazingProjects, an academic research platform.\n\nFormatting rules:\n- Do NOT use asterisks around list items\n- Only bold the brand name: *BlazingProjects*\n- Keep replies concise and friendly\n- Never discuss competitor platforms`}
                 />
+              </div>
+
+              {/* SLA & Re-engagement */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">SLA Alert (minutes)</label>
+                  <p className="text-xs text-gray-400 mb-1.5">Flag unanswered conversations after this many minutes.</p>
+                  <input type="number" min={5} className="input" value={editSlaMinutes} onChange={(e) => setEditSlaMinutes(parseInt(e.target.value) || 60)} />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Re-engage After (days)</label>
+                  <p className="text-xs text-gray-400 mb-1.5">Auto follow-up cold contacts after this many days.</p>
+                  <input type="number" min={1} className="input" value={editReEngageDays} onChange={(e) => setEditReEngageDays(parseInt(e.target.value) || 7)} />
+                </div>
+              </div>
+
+              {/* Webhooks */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Webhook URL</label>
+                <p className="text-xs text-gray-400 mb-1.5">POST events (new conversation, escalation, CSAT) to this URL.</p>
+                <input className="input" value={editWebhookUrl} onChange={(e) => setEditWebhookUrl(e.target.value)} placeholder="https://your-server.com/webhook" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Slack Webhook URL</label>
+                <p className="text-xs text-gray-400 mb-1.5">Send alerts to a Slack channel via incoming webhook.</p>
+                <input className="input" value={editSlackWebhookUrl} onChange={(e) => setEditSlackWebhookUrl(e.target.value)} placeholder="https://hooks.slack.com/services/..." />
               </div>
 
               {saveMsg && (
