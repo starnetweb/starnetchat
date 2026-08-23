@@ -85,17 +85,20 @@ async function start() {
 
   httpServer.listen(PORT, async () => {
     console.log(`API running on port ${PORT}`)
-    await initQueue()
-    await initWhatsappSessions()
-    startScheduledBroadcastRunner()
-    startReEngagementRunner()
-    startSmartFollowUpRunner()
 
-    // Auto-connect WhatsApp on startup
+    // Init Redis queue — non-blocking so WhatsApp still starts if Redis is down
+    initQueue().catch((err: any) => console.error('[QUEUE] Redis init failed (non-fatal):', err.message))
+
+    // WhatsApp must always start regardless of Redis state
+    await initWhatsappSessions()
     const { connect, initEventBus } = await import('@wac/whatsapp')
     initEventBus(eventBus)
     console.log('WhatsApp: auto-connecting...')
     connect().catch((err: any) => console.error('WhatsApp auto-connect error:', err.message))
+
+    startScheduledBroadcastRunner()
+    startReEngagementRunner()
+    startSmartFollowUpRunner()
   })
 }
 
