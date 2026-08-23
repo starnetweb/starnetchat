@@ -110,6 +110,7 @@ waRouter.post('/train-from-history', async (_req, res) => {
     'we hope you are satisfied',
     'hello! i can help you with several',
     'could you let me know which brand',
+    'we noticed we haven',
   ]
 
   const conversations = await prisma.conversation.findMany({
@@ -119,48 +120,56 @@ waRouter.post('/train-from-history', async (_req, res) => {
       brandId: true,
       messages: {
         orderBy: { sentAt: 'asc' },
-        select: { direction: true, content: true, role: true },
+        select: { direction: true, content: true },
       },
     },
   })
 
-  let added = 0
-  let updated = 0
+  // Collect all pairs first, deduplicate in memory
+  const pairMap = new Map<string, { brandId: string; userMessage: string; agentReply: string; frequency: number }>()
 
   for (const conv of conversations) {
     const msgs = conv.messages
     for (let i = 0; i < msgs.length - 1; i++) {
       const current = msgs[i]
       const next = msgs[i + 1]
-
-      // Only care about INBOUND → OUTBOUND pairs
       if (current.direction !== 'INBOUND' || next.direction !== 'OUTBOUND') continue
 
       const q = current.content.trim()
       const a = next.content.trim()
-
-      // Skip short or system-like messages
       if (q.length < 8 || a.length < 8) continue
-      if (SKIP_PHRASES.some((p) => a.toLowerCase().startsWith(p))) continue
+      if (SKIP_PHRASES.some((p) => a.toLowerCase().includes(p))) continue
 
-      // Deduplicate — bump frequency if same pair exists
-      const existing = await prisma.learnedPattern.findFirst({
-        where: { brandId: conv.brandId, userMessage: q, agentReply: a },
-      })
-
+      const key = `${conv.brandId}::${q}::${a}`
+      const existing = pairMap.get(key)
       if (existing) {
-        await prisma.learnedPattern.update({
-          where: { id: existing.id },
-          data: { frequency: { increment: 1 } },
-        })
-        updated++
+        existing.frequency++
       } else {
-        await prisma.learnedPattern.create({
-          data: { brandId: conv.brandId, userMessage: q, agentReply: a, frequency: 1 },
-        })
-        added++
+        pairMap.set(key, { brandId: conv.brandId, userMessage: q, agentReply: a, frequency: 1 })
       }
     }
+  }
+
+  const pairs = Array.from(pairMap.values())
+  let added = 0
+  let updated = 0
+
+  // Upsert in batches of 20 to avoid overwhelming the DB
+  for (let i = 0; i < pairs.length; i += 20) {
+    const batch = pairs.slice(i, i + 20)
+    await Promise.all(batch.map(async (p) => {
+      const existing = await prisma.learnedPattern.findFirst({
+        where: { brandId: p.brandId, userMessage: p.userMessage, agentReply: p.agentReply },
+        select: { id: true },
+      })
+      if (existing) {
+        await prisma.learnedPattern.update({ where: { id: existing.id }, data: { frequency: { increment: p.frequency } } })
+        updated++
+      } else {
+        await prisma.learnedPattern.create({ data: p })
+        added++
+      }
+    }))
   }
 
   res.json({ added, updated, total: added + updated, conversations: conversations.length })
