@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { useAuthStore } from '@/lib/store'
-import { User, Lock, Bell, Shield, Save, Loader2, Bot, GraduationCap } from 'lucide-react'
+import { User, Lock, Bell, Shield, Save, Loader2, Bot, GraduationCap, BookOpen, CheckCircle2 } from 'lucide-react'
 import { api } from '@/lib/api'
 
 export default function SettingsPage() {
@@ -13,6 +13,7 @@ export default function SettingsPage() {
   const [modelSaved, setModelSaved] = useState(false)
   const [learnMode, setLearnMode] = useState(false)
   const [learnSaving, setLearnSaving] = useState(false)
+  const [trainState, setTrainState] = useState<{ loading: boolean; result: { added: number; updated: number; total: number; conversations: number } | null; error: string | null }>({ loading: false, result: null, error: null })
 
   useEffect(() => {
     api.get('/whatsapp/ai-model').then((d: any) => setAiModel(d.aiModel ?? 'claude')).catch(() => {})
@@ -50,6 +51,17 @@ export default function SettingsPage() {
     emailNotifications: true,
     escalationAlerts: true,
   })
+
+  async function trainFromHistory() {
+    if (!confirm('This will scan all past conversations and extract Q&A pairs to train the AI. This may take a minute. Continue?')) return
+    setTrainState({ loading: true, result: null, error: null })
+    try {
+      const res = await api.post('/whatsapp/train-from-history', {})
+      setTrainState({ loading: false, result: res, error: null })
+    } catch (err: any) {
+      setTrainState({ loading: false, result: null, error: err.message })
+    }
+  }
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault()
@@ -287,6 +299,47 @@ export default function SettingsPage() {
         <p className="text-xs text-gray-400 mt-4">
           Tip: Start in Learn mode, let your team handle chats for a few days, then switch to Active — the AI will reply in your team's tone.
         </p>
+      </div>
+
+      {/* Train from History */}
+      <div className="card p-6">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-8 h-8 bg-teal-100 rounded-lg flex items-center justify-center">
+            <BookOpen size={16} className="text-teal-600" />
+          </div>
+          <div>
+            <h2 className="font-semibold text-gray-900 text-sm">Train AI from Chat History</h2>
+            <p className="text-xs text-gray-400">Scan all past conversations and extract Q&amp;A pairs to improve AI replies</p>
+          </div>
+        </div>
+
+        <div className="bg-teal-50 border border-teal-100 rounded-xl p-4 text-sm text-teal-800 mb-4">
+          The AI will go through every past conversation, find customer questions paired with agent replies, and store them as training examples. The more chats you have, the better it learns your team's tone and style.
+        </div>
+
+        <button
+          onClick={trainFromHistory}
+          disabled={trainState.loading}
+          className="flex items-center gap-2 px-4 py-2 rounded-lg bg-teal-600 text-white text-sm font-medium hover:bg-teal-700 transition disabled:opacity-50"
+        >
+          <BookOpen size={14} className={trainState.loading ? 'animate-pulse' : ''} />
+          {trainState.loading ? 'Scanning conversations...' : 'Train from History'}
+        </button>
+
+        {trainState.result && (
+          <div className="mt-4 flex items-start gap-2 bg-green-50 border border-green-100 rounded-xl p-4 text-sm text-green-800">
+            <CheckCircle2 size={15} className="shrink-0 mt-0.5" />
+            <div>
+              Scanned <strong>{trainState.result.conversations}</strong> conversations —{' '}
+              <strong>{trainState.result.added}</strong> new patterns learned,{' '}
+              <strong>{trainState.result.updated}</strong> existing patterns reinforced.{' '}
+              Total: <strong>{trainState.result.total}</strong> Q&amp;A examples in the AI knowledge base.
+            </div>
+          </div>
+        )}
+        {trainState.error && (
+          <p className="mt-3 text-sm text-red-600">{trainState.error}</p>
+        )}
       </div>
 
       {/* Save */}
