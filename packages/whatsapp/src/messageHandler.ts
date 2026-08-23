@@ -17,6 +17,15 @@ const FALLBACK_PROMPT =
 
 export async function handleIncomingMessage(sock: any, msg: proto.IWebMessageInfo) {
   const jid = msg.key.remoteJid!
+
+  // Ignore group chats, status broadcasts, and newsletter messages
+  if (
+    jid.includes('@g.us') ||
+    jid.includes('status@broadcast') ||
+    jid.includes('@newsletter') ||
+    jid.includes('broadcast')
+  ) return
+
   // Handle both @s.whatsapp.net and @lid JID formats
   const phone = jid.replace('@s.whatsapp.net', '').replace('@lid', '')
   const text =
