@@ -1,7 +1,7 @@
 'use client'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { MessageSquare, Building2, Zap, BookOpen, Settings, LogOut, Menu, X, Reply, Megaphone, Users, BarChart3, Layers } from 'lucide-react'
+import { MessageSquare, Building2, Zap, BookOpen, Settings, LogOut, Menu, X, Reply, Megaphone, Users, BarChart3, Layers, Lightbulb } from 'lucide-react'
 import { useAuthStore } from '@/lib/store'
 import { useState } from 'react'
 
@@ -11,6 +11,7 @@ const nav = [
   { href: '/brands', label: 'Brands & WA', icon: Building2 },
   { href: '/automation', label: 'Automation', icon: Zap },
   { href: '/training', label: 'Training', icon: BookOpen },
+  { href: '/suggestions', label: 'AI Suggestions', icon: Lightbulb },
   { href: '/quick-replies', label: 'Quick Replies', icon: Reply },
   { href: '/canned-responses', label: 'Canned Replies', icon: Layers },
   { href: '/broadcast', label: 'Broadcast', icon: Megaphone },

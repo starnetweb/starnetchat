@@ -101,6 +101,23 @@ waRouter.delete('/learned-patterns/:id', async (req, res) => {
   res.json({ success: true })
 })
 
+// AI Schedule — get/set schedule config
+waRouter.get('/ai-schedule', async (_req, res) => {
+  const session = await prisma.whatsappSession.findFirst({ where: { sessionKey: 'main' } })
+  res.json({ aiSchedule: session?.aiSchedule ?? null })
+})
+
+waRouter.post('/ai-schedule', async (req, res) => {
+  const { aiSchedule } = req.body
+  const session = await prisma.whatsappSession.findFirst({ where: { sessionKey: 'main' } })
+  if (!session) return res.status(404).json({ error: 'Session not found' })
+  const updated = await prisma.whatsappSession.update({
+    where: { id: session.id },
+    data: { aiSchedule },
+  })
+  res.json({ aiSchedule: updated.aiSchedule })
+})
+
 // Train from history — scan all past conversations and extract Q&A pairs as LearnedPatterns
 waRouter.post('/train-from-history', async (_req, res) => {
   const SKIP_PHRASES = [
@@ -173,4 +190,87 @@ waRouter.post('/train-from-history', async (_req, res) => {
   }
 
   res.json({ added, updated, total: added + updated, conversations: conversations.length })
+})
+
+// ── AI Suggested Replies (Learn Mode review queue) ────────────────────────────
+
+// List suggestions — paginated, filterable by status
+waRouter.get('/suggested-replies', async (req, res) => {
+  const status = (req.query.status as string) || 'pending'
+  const page = parseInt(req.query.page as string) || 1
+  const take = 20
+  const skip = (page - 1) * take
+
+  const [items, total] = await Promise.all([
+    prisma.suggestedReply.findMany({
+      where: status === 'all' ? {} : { status },
+      orderBy: { createdAt: 'desc' },
+      take,
+      skip,
+      include: {
+        brand: { select: { name: true, slug: true } },
+        conversation: { select: { id: true } },
+      },
+    }),
+    prisma.suggestedReply.count({ where: status === 'all' ? {} : { status } }),
+  ])
+
+  res.json({ items, total, page, pages: Math.ceil(total / take) })
+})
+
+// Get counts per status for the badge
+waRouter.get('/suggested-replies/counts', async (_req, res) => {
+  const [pending, approved, rejected] = await Promise.all([
+    prisma.suggestedReply.count({ where: { status: 'pending' } }),
+    prisma.suggestedReply.count({ where: { status: 'approved' } }),
+    prisma.suggestedReply.count({ where: { status: 'rejected' } }),
+  ])
+  res.json({ pending, approved, rejected, total: pending + approved + rejected })
+})
+
+// Approve a suggestion (with optional human correction) — adds to LearnedPatterns
+waRouter.post('/suggested-replies/:id/approve', async (req, res) => {
+  const { humanCorrection } = req.body
+  const suggestion = await prisma.suggestedReply.findUnique({ where: { id: req.params.id } })
+  if (!suggestion) return res.status(404).json({ error: 'Not found' })
+
+  const finalReply = humanCorrection?.trim() || suggestion.aiSuggestion
+
+  // Upsert into LearnedPatterns
+  const existing = await prisma.learnedPattern.findFirst({
+    where: { brandId: suggestion.brandId, userMessage: suggestion.userMessage, agentReply: finalReply },
+  })
+  if (existing) {
+    await prisma.learnedPattern.update({ where: { id: existing.id }, data: { frequency: { increment: 1 } } })
+  } else {
+    await prisma.learnedPattern.create({
+      data: { brandId: suggestion.brandId, userMessage: suggestion.userMessage, agentReply: finalReply },
+    })
+  }
+
+  const updated = await prisma.suggestedReply.update({
+    where: { id: req.params.id },
+    data: { status: 'approved', humanCorrection: humanCorrection?.trim() || null },
+  })
+
+  res.json(updated)
+})
+
+// Reject a suggestion
+waRouter.post('/suggested-replies/:id/reject', async (req, res) => {
+  const updated = await prisma.suggestedReply.update({
+    where: { id: req.params.id },
+    data: { status: 'rejected' },
+  })
+  res.json(updated)
+})
+
+// Update the human correction text (before approving)
+waRouter.patch('/suggested-replies/:id', async (req, res) => {
+  const { humanCorrection } = req.body
+  const updated = await prisma.suggestedReply.update({
+    where: { id: req.params.id },
+    data: { humanCorrection },
+  })
+  res.json(updated)
 })

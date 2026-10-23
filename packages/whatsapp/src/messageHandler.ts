@@ -299,6 +299,16 @@ export async function handleIncomingMessage(sock: any, msg: proto.IWebMessageInf
     console.log(`[AI] Low confidence — conversation ${conversation.id} handed off to human`)
   }
 
+  // ── Tag conversation as "AI-replied" ─────────────────────────────────────
+  const currentLabels: string[] = (conversation as any).aiLabels ?? []
+  if (!currentLabels.includes('AI-replied')) {
+    await prisma.conversation.update({
+      where: { id: conversation.id },
+      data: { aiLabels: { set: [...currentLabels, 'AI-replied'] } } as any,
+    })
+    emit('conversation:updated', { conversationId: conversation.id, aiLabels: [...currentLabels, 'AI-replied'] })
+  }
+
   // ── Auto-label conversation in background ─────────────────────────────────
   const allMessages = await prisma.message.findMany({
     where: { conversationId: conversation.id },
@@ -308,8 +318,10 @@ export async function handleIncomingMessage(sock: any, msg: proto.IWebMessageInf
   })
   autoLabelConversation(allMessages).then(async (labels) => {
     if (labels.length) {
-      await prisma.conversation.update({ where: { id: conversation.id }, data: { aiLabels: labels } as any })
-      emit('conversation:updated', { conversationId: conversation.id, aiLabels: labels })
+      const fresh = await prisma.conversation.findUnique({ where: { id: conversation.id }, select: { aiLabels: true } })
+      const merged = Array.from(new Set([...(fresh?.aiLabels ?? []), ...labels]))
+      await prisma.conversation.update({ where: { id: conversation.id }, data: { aiLabels: merged } as any })
+      emit('conversation:updated', { conversationId: conversation.id, aiLabels: merged })
     }
   }).catch(() => {})
 
@@ -385,7 +397,7 @@ export async function handleHumanAgentReply(msg: proto.IWebMessageInfo) {
   })
   if (existing) return
 
-  // Save as human agent outbound message and bump conversation updatedAt
+  // Save as human agent outbound message, hand off from AI, and bump updatedAt
   await Promise.all([
     prisma.message.create({
       data: {
@@ -396,13 +408,16 @@ export async function handleHumanAgentReply(msg: proto.IWebMessageInfo) {
         whatsappMsgId: msg.key.id,
       },
     }),
-    prisma.conversation.update({ where: { id: conversation.id }, data: { updatedAt: new Date() } }),
+    prisma.conversation.update({
+      where: { id: conversation.id },
+      data: { updatedAt: new Date(), aiManaged: false },
+    }),
   ])
 
   console.log(`[HUMAN] CS reply captured for conversation ${conversation.id}: "${text.slice(0, 60)}"`)
   emit('message:new', { conversationId: conversation.id, direction: 'OUTBOUND', content: text })
 
-  // In learn mode: pair this reply with the last customer message as a learned pattern
+  // In learn mode: save pattern + ask AI to suggest a better reply for human review
   const learnSession = await prisma.whatsappSession.findFirst({ where: { sessionKey: 'main' } })
   if (learnSession?.learnMode) {
     const lastInbound = await prisma.message.findFirst({
@@ -410,30 +425,62 @@ export async function handleHumanAgentReply(msg: proto.IWebMessageInfo) {
       orderBy: { sentAt: 'desc' },
     })
     if (lastInbound) {
-      // Deduplicate: if same question was seen before, bump frequency instead of creating a new row
+      // Save as learned pattern (raw human reply)
       const existing = await prisma.learnedPattern.findFirst({
-        where: {
-          brandId: conversation.brandId,
-          userMessage: lastInbound.content,
-          agentReply: text,
-        },
+        where: { brandId: conversation.brandId, userMessage: lastInbound.content, agentReply: text },
       })
       if (existing) {
-        await prisma.learnedPattern.update({
-          where: { id: existing.id },
-          data: { frequency: existing.frequency + 1 },
-        })
+        await prisma.learnedPattern.update({ where: { id: existing.id }, data: { frequency: existing.frequency + 1 } })
       } else {
-        await prisma.learnedPattern.create({
-          data: {
-            brandId: conversation.brandId,
-            userMessage: lastInbound.content,
-            agentReply: text,
-          },
-        })
+        await prisma.learnedPattern.create({ data: { brandId: conversation.brandId, userMessage: lastInbound.content, agentReply: text } })
       }
       console.log(`[LEARN] Saved pattern for brand ${conversation.brandId}`)
+
+      // Ask AI to suggest a better reply — non-blocking, result stored for human review
+      generateAISuggestion(conversation.brandId, conversation.id, lastInbound.content, text).catch(() => {})
     }
+  }
+}
+
+async function generateAISuggestion(brandId: string, conversationId: string, userMessage: string, humanReply: string) {
+  try {
+    const brand = await prisma.brand.findUnique({ where: { id: brandId } })
+    if (!brand) return
+
+    const Anthropic = (await import('@anthropic-ai/sdk')).default
+    const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+
+    const prompt = `You are a customer service quality coach for "${brand.name}".
+
+A customer sent this message:
+"${userMessage}"
+
+A human agent replied:
+"${humanReply}"
+
+Your task: suggest a BETTER version of the human reply. Keep the same intent and facts, but make it:
+- Warmer and more professional
+- Clearer and more helpful
+- Concise (WhatsApp-style, not email)
+- In the same language as the human reply
+
+Reply with ONLY the improved message text — no explanation, no quotes, no prefix.`
+
+    const response = await anthropic.messages.create({
+      model: 'claude-haiku-4-5',
+      max_tokens: 300,
+      messages: [{ role: 'user', content: prompt }],
+    })
+
+    const aiSuggestion = (response.content[0] as any).text?.trim()
+    if (!aiSuggestion || aiSuggestion === humanReply) return
+
+    await prisma.suggestedReply.create({
+      data: { brandId, conversationId, userMessage, humanReply, aiSuggestion },
+    })
+    console.log(`[LEARN] AI suggestion saved for conversation ${conversationId}`)
+  } catch (err: any) {
+    console.error('[LEARN] Failed to generate AI suggestion:', err.message)
   }
 }
 

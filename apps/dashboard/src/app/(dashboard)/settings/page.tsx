@@ -1,8 +1,19 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { useAuthStore } from '@/lib/store'
-import { User, Lock, Bell, Shield, Save, Loader2, Bot, GraduationCap, BookOpen, CheckCircle2 } from 'lucide-react'
+import { User, Lock, Bell, Shield, Save, Loader2, Bot, GraduationCap, BookOpen, CheckCircle2, Clock } from 'lucide-react'
 import { api } from '@/lib/api'
+
+const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+
+interface ScheduleSlot { days: number[]; startTime: string; endTime: string }
+interface AISchedule { enabled: boolean; timezone: string; slots: ScheduleSlot[] }
+
+const DEFAULT_SCHEDULE: AISchedule = {
+  enabled: false,
+  timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'Africa/Lagos',
+  slots: [{ days: [1, 2, 3, 4, 5], startTime: '08:00', endTime: '18:00' }],
+}
 
 export default function SettingsPage() {
   const { user } = useAuthStore()
@@ -13,11 +24,15 @@ export default function SettingsPage() {
   const [modelSaved, setModelSaved] = useState(false)
   const [learnMode, setLearnMode] = useState(false)
   const [learnSaving, setLearnSaving] = useState(false)
+  const [schedule, setSchedule] = useState<AISchedule>(DEFAULT_SCHEDULE)
+  const [scheduleSaving, setScheduleSaving] = useState(false)
+  const [scheduleSaved, setScheduleSaved] = useState(false)
   const [trainState, setTrainState] = useState<{ loading: boolean; result: { added: number; updated: number; total: number; conversations: number } | null; error: string | null }>({ loading: false, result: null, error: null })
 
   useEffect(() => {
     api.get('/whatsapp/ai-model').then((d: any) => setAiModel(d.aiModel ?? 'claude')).catch(() => {})
     api.get('/whatsapp/learn-mode').then((d: any) => setLearnMode(d.learnMode ?? false)).catch(() => {})
+    api.get('/whatsapp/ai-schedule').then((d: any) => { if (d.aiSchedule) setSchedule(d.aiSchedule) }).catch(() => {})
   }, [])
 
   async function handleLearnModeToggle(value: boolean) {
@@ -51,6 +66,32 @@ export default function SettingsPage() {
     emailNotifications: true,
     escalationAlerts: true,
   })
+
+  async function saveSchedule() {
+    setScheduleSaving(true)
+    try {
+      await api.post('/whatsapp/ai-schedule', { aiSchedule: schedule })
+      setScheduleSaved(true)
+      setTimeout(() => setScheduleSaved(false), 3000)
+    } finally {
+      setScheduleSaving(false)
+    }
+  }
+
+  function updateSlot(idx: number, patch: Partial<ScheduleSlot>) {
+    setSchedule(s => ({ ...s, slots: s.slots.map((slot, i) => i === idx ? { ...slot, ...patch } : slot) }))
+  }
+
+  function toggleSlotDay(slotIdx: number, day: number) {
+    setSchedule(s => ({
+      ...s,
+      slots: s.slots.map((slot, i) => {
+        if (i !== slotIdx) return slot
+        const days = slot.days.includes(day) ? slot.days.filter(d => d !== day) : [...slot.days, day].sort()
+        return { ...slot, days }
+      }),
+    }))
+  }
 
   async function trainFromHistory() {
     if (!confirm('This will scan all past conversations and extract Q&A pairs to train the AI. This may take a minute. Continue?')) return
@@ -299,6 +340,123 @@ export default function SettingsPage() {
         <p className="text-xs text-gray-400 mt-4">
           Tip: Start in Learn mode, let your team handle chats for a few days, then switch to Active — the AI will reply in your team's tone.
         </p>
+      </div>
+
+      {/* AI Schedule */}
+      <div className="card p-6">
+        <div className="flex items-center gap-3 mb-5">
+          <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
+            <Clock size={16} className="text-blue-600" />
+          </div>
+          <div className="flex-1">
+            <h2 className="font-semibold text-gray-900 text-sm">AI Schedule</h2>
+            <p className="text-xs text-gray-400">Set days and hours when AI actively responds. Outside these hours it learns from your team.</p>
+          </div>
+          <button
+            onClick={() => setSchedule(s => ({ ...s, enabled: !s.enabled }))}
+            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${schedule.enabled ? 'bg-blue-600' : 'bg-gray-200'}`}
+          >
+            <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${schedule.enabled ? 'translate-x-6' : 'translate-x-1'}`} />
+          </button>
+        </div>
+
+        {schedule.enabled && (
+          <div className="space-y-5">
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1.5">Timezone</label>
+              <input
+                className="input text-sm"
+                value={schedule.timezone}
+                onChange={e => setSchedule(s => ({ ...s, timezone: e.target.value }))}
+                placeholder="Africa/Lagos"
+              />
+              <p className="text-xs text-gray-400 mt-1">IANA timezone (e.g. Africa/Lagos, Europe/London)</p>
+            </div>
+
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-medium text-gray-600">Active Windows</label>
+                <button
+                  type="button"
+                  onClick={() => setSchedule(s => ({ ...s, slots: [...s.slots, { days: [1, 2, 3, 4, 5], startTime: '09:00', endTime: '17:00' }] }))}
+                  className="text-xs text-blue-600 hover:text-blue-700 font-medium"
+                >
+                  + Add window
+                </button>
+              </div>
+
+              {schedule.slots.map((slot, idx) => (
+                <div key={idx} className="border border-gray-100 rounded-xl p-4 space-y-3">
+                  <div className="flex flex-wrap gap-1.5">
+                    {DAYS.map((d, di) => (
+                      <button
+                        key={di}
+                        type="button"
+                        onClick={() => toggleSlotDay(idx, di)}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
+                          slot.days.includes(di) ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                        }`}
+                      >
+                        {d}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="flex-1">
+                      <label className="block text-xs text-gray-500 mb-1">Start</label>
+                      <input
+                        type="time"
+                        className="input text-sm"
+                        value={slot.startTime}
+                        onChange={e => updateSlot(idx, { startTime: e.target.value })}
+                      />
+                    </div>
+                    <div className="flex-1">
+                      <label className="block text-xs text-gray-500 mb-1">End</label>
+                      <input
+                        type="time"
+                        className="input text-sm"
+                        value={slot.endTime}
+                        onChange={e => updateSlot(idx, { endTime: e.target.value })}
+                      />
+                    </div>
+                    {schedule.slots.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => setSchedule(s => ({ ...s, slots: s.slots.filter((_, i) => i !== idx) }))}
+                        className="mt-5 text-xs text-red-400 hover:text-red-600"
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 text-xs text-blue-700">
+              Outside scheduled windows, the AI switches to <strong>Learn mode</strong> — it stays silent while your team handles chats, and captures every reply as training data.
+            </div>
+          </div>
+        )}
+
+        {!schedule.enabled && (
+          <div className="text-xs text-gray-400">
+            Schedule is off — AI operates based on the manual toggle above.
+          </div>
+        )}
+
+        <div className="flex items-center gap-3 mt-5">
+          <button
+            onClick={saveSchedule}
+            disabled={scheduleSaving}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition disabled:opacity-50"
+          >
+            {scheduleSaving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+            {scheduleSaving ? 'Saving...' : 'Save Schedule'}
+          </button>
+          {scheduleSaved && <span className="text-xs text-green-600 font-medium">✓ Schedule saved</span>}
+        </div>
       </div>
 
       {/* Train from History */}

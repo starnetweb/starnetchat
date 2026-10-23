@@ -82,6 +82,7 @@ async function start() {
   const { startScheduledBroadcastRunner } = await import('./scheduledBroadcastRunner')
   const { startReEngagementRunner } = await import('./reEngagementRunner')
   const { startSmartFollowUpRunner } = await import('./smartFollowUpRunner')
+  const { startAIScheduleRunner } = await import('./aiScheduleRunner')
 
   httpServer.listen(PORT, async () => {
     console.log(`API running on port ${PORT}`)
@@ -99,6 +100,7 @@ async function start() {
     startScheduledBroadcastRunner()
     startReEngagementRunner()
     startSmartFollowUpRunner()
+    startAIScheduleRunner()
   })
 }
 

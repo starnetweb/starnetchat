@@ -45,6 +45,7 @@ model Brand {
   cannedResponses     CannedResponse[]
   scheduledBroadcasts ScheduledBroadcast[]
   learnedPatterns     LearnedPattern[]
+  suggestedReplies    SuggestedReply[]
 
   @@map("brands")
 }
@@ -63,6 +64,8 @@ model WhatsappSession {
   aiModel   String        @default("claude")
   // Learn mode: when true, AI stays silent and human replies are stored as training examples
   learnMode Boolean       @default(false)
+  // AI Schedule: JSON config { enabled, timezone, slots:[{days,startTime,endTime}] }
+  aiSchedule Json?
   createdAt DateTime      @default(now())
   updatedAt DateTime      @updatedAt
 
@@ -140,8 +143,9 @@ model Conversation {
 
   brand       Brand     @relation(fields: [brandId], references: [id])
   contact     Contact   @relation(fields: [contactId], references: [id])
-  messages    Message[]
-  jobs        AutomationJob[]
+  messages         Message[]
+  jobs             AutomationJob[]
+  suggestedReplies SuggestedReply[]
 
   @@map("conversations")
 }
@@ -388,6 +392,29 @@ model LearnedPattern {
   brand        Brand @relation(fields: [brandId], references: [id], onDelete: Cascade)
 
   @@map("learned_patterns")
+}
+
+// ─── AI Suggested Replies (Learn Mode) ───────────────────────────────────────
+// When in learn mode, after each human agent reply the AI silently generates
+// a suggested better reply. Humans review, correct if needed, then approve —
+// approved suggestions become LearnedPatterns used when AI goes active.
+
+model SuggestedReply {
+  id              String   @id @default(cuid())
+  brandId         String
+  conversationId  String
+  userMessage     String   @db.Text
+  humanReply      String   @db.Text
+  aiSuggestion    String   @db.Text
+  humanCorrection String?  @db.Text  // set when human edits the AI suggestion
+  status          String   @default("pending") // pending | approved | rejected
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  brand           Brand        @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  conversation    Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@map("suggested_replies")
 }
 
 // ─── Scheduled Broadcasts ─────────────────────────────────────────────────────
