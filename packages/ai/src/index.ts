@@ -283,3 +283,40 @@ export async function embedAndStoreChunks(
 export async function deleteKnowledgeBase(brandId: string) {
   await prisma.knowledgeChunk.deleteMany({ where: { brandId } })
 }
+
+// ── Reply Suggestion (Learn Mode) ─────────────────────────────────────────────
+// Given a customer message + human agent reply, generate a suggested improvement
+// to be reviewed by a human before being approved as a LearnedPattern.
+
+export async function generateReplySuggestion(
+  brandName: string,
+  userMessage: string,
+  humanReply: string,
+): Promise<string | null> {
+  const anthropic = getAnthropicClient()
+
+  const prompt = `You are a customer service quality coach for "${brandName}".
+
+A customer sent this message:
+"${userMessage}"
+
+A human agent replied:
+"${humanReply}"
+
+Suggest a BETTER version of the human reply. Keep the same intent and facts, but make it:
+- Warmer and more professional
+- Clearer and more helpful
+- Concise (WhatsApp-style, not email)
+- In the same language as the human reply
+
+Reply with ONLY the improved message text — no explanation, no quotes, no prefix.`
+
+  const response = await anthropic.messages.create({
+    model: 'claude-haiku-4-5',
+    max_tokens: 300,
+    messages: [{ role: 'user', content: prompt }],
+  })
+
+  const suggestion = (response.content[0] as any).text?.trim()
+  return suggestion && suggestion !== humanReply ? suggestion : null
+}

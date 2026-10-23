@@ -1,6 +1,6 @@
 import { proto } from '@whiskeysockets/baileys'
 import { prisma } from '@wac/db'
-import { generateAIResponse, detectBrand, analyzeSentiment, autoLabelConversation } from '@wac/ai'
+import { generateAIResponse, detectBrand, analyzeSentiment, autoLabelConversation, generateReplySuggestion } from '@wac/ai'
 import { scheduleAutomations } from '@wac/queue'
 import { EventEmitter } from 'events'
 
@@ -447,33 +447,8 @@ async function generateAISuggestion(brandId: string, conversationId: string, use
     const brand = await prisma.brand.findUnique({ where: { id: brandId } })
     if (!brand) return
 
-    const Anthropic = (await import('@anthropic-ai/sdk')).default
-    const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
-
-    const prompt = `You are a customer service quality coach for "${brand.name}".
-
-A customer sent this message:
-"${userMessage}"
-
-A human agent replied:
-"${humanReply}"
-
-Your task: suggest a BETTER version of the human reply. Keep the same intent and facts, but make it:
-- Warmer and more professional
-- Clearer and more helpful
-- Concise (WhatsApp-style, not email)
-- In the same language as the human reply
-
-Reply with ONLY the improved message text — no explanation, no quotes, no prefix.`
-
-    const response = await anthropic.messages.create({
-      model: 'claude-haiku-4-5',
-      max_tokens: 300,
-      messages: [{ role: 'user', content: prompt }],
-    })
-
-    const aiSuggestion = (response.content[0] as any).text?.trim()
-    if (!aiSuggestion || aiSuggestion === humanReply) return
+    const aiSuggestion = await generateReplySuggestion(brand.name, userMessage, humanReply)
+    if (!aiSuggestion) return
 
     await prisma.suggestedReply.create({
       data: { brandId, conversationId, userMessage, humanReply, aiSuggestion },
