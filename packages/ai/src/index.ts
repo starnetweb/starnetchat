@@ -67,7 +67,7 @@ export async function detectBrand(
 export async function analyzeSentiment(text: string): Promise<'positive' | 'neutral' | 'negative' | 'angry'> {
   try {
     const response = await getAnthropicClient().messages.create({
-      model: 'claude-haiku-4-5',
+      model: 'claude-haiku-5-5',
       max_tokens: 20,
       system: 'Classify the sentiment of the customer message. Reply with exactly one word: positive, neutral, negative, or angry. No explanation.',
       messages: [{ role: 'user', content: text }],
@@ -97,7 +97,7 @@ export async function autoLabelConversation(messages: { role: string; content: s
   try {
     const transcript = messages.slice(-10).map((m) => `${m.role === 'USER' ? 'Customer' : 'Agent'}: ${m.content}`).join('\n')
     const response = await getAnthropicClient().messages.create({
-      model: 'claude-haiku-4-5',
+      model: 'claude-haiku-5-5',
       max_tokens: 80,
       system: `Analyze this customer support conversation and return a JSON array of applicable labels from this list: ${ALL_AI_LABELS.join(', ')}.
 Return ONLY a JSON array, e.g. ["AI-interested","AI-price-inquiry"]. Empty array if none apply. No explanation.`,
@@ -114,7 +114,7 @@ Return ONLY a JSON array, e.g. ["AI-interested","AI-price-inquiry"]. Empty array
 export async function summarizeConversation(messages: { role: string; content: string }[]): Promise<string> {
   const transcript = messages.map((m) => `${m.role === 'USER' ? 'Customer' : 'Agent'}: ${m.content}`).join('\n')
   const response = await getAnthropicClient().messages.create({
-    model: 'claude-haiku-4-5',
+    model: 'claude-haiku-5-5',
     max_tokens: 300,
     system: 'Summarize this customer support conversation in 3-5 bullet points. Focus on: what the customer needed, what was resolved, and any follow-up required. Plain text, no emojis.',
     messages: [{ role: 'user', content: transcript }],
@@ -212,7 +212,7 @@ async function generateWithClaude(
   messages.push({ role: 'user', content: userMessage })
 
   const response = await getAnthropicClient().messages.create({
-    model: 'claude-haiku-4-5',
+    model: 'claude-haiku-5-5',
     max_tokens: 1024,
     system: systemPrompt,
     messages,
@@ -236,7 +236,7 @@ async function generateWithOpenAI(
   ]
 
   const response = await getOpenAIClient().chat.completions.create({
-    model: 'gpt-5.4-nano',
+    model: 'gpt-4.1-nano',
     max_tokens: 1024,
     messages,
   })
@@ -294,7 +294,7 @@ export async function deleteKnowledgeBase(brandId: string) {
 export async function detectIntent(text: string): Promise<string> {
   try {
     const response = await getAnthropicClient().messages.create({
-      model: 'claude-haiku-4-5',
+      model: 'claude-haiku-5-5',
       max_tokens: 30,
       system: `Classify the customer's intent in 2-4 words. Use lowercase, hyphenated phrases like:
 pricing-inquiry, order-status, complaint, refund-request, general-inquiry, product-info,
@@ -337,7 +337,7 @@ Suggest a BETTER version of the human reply. Keep the same intent and facts, but
 Reply with ONLY the improved message text — no explanation, no quotes, no prefix.`
 
   const response = await anthropic.messages.create({
-    model: 'claude-haiku-4-5',
+    model: 'claude-haiku-5-5',
     max_tokens: 300,
     messages: [{ role: 'user', content: prompt }],
   })
