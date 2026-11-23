@@ -2,10 +2,8 @@ import { prisma } from '@wac/db'
 import { getSocket } from '@wac/whatsapp'
 
 export function startReEngagementRunner() {
-  // Run every 6 hours
+  // Run every 6 hours — NO startup fire to avoid blasting on redeploy
   setInterval(runReEngagement, 6 * 60 * 60 * 1000)
-  // Also run once on startup after a short delay
-  setTimeout(runReEngagement, 60 * 1000)
 }
 
 async function runReEngagement() {
