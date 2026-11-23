@@ -18,6 +18,13 @@ async function runSmartFollowUps() {
   const sock = getSocket()
   if (!sock) return
 
+  // Never send automated messages when AI is disabled or in learn mode
+  const session = await prisma.whatsappSession.findFirst({ where: { sessionKey: 'main' } })
+  if (!session?.aiEnabled || session?.learnMode) {
+    console.log('[SMART-FOLLOWUP] Skipping — AI is disabled or learn mode is on')
+    return
+  }
+
   await Promise.all([
     runCompletedReviewRequests(sock),
     runNoReplyFollowUps(sock),

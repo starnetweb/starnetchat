@@ -13,6 +13,13 @@ async function runReEngagement() {
   const sock = getSocket()
   if (!sock) return
 
+  // Never send automated messages when AI is disabled or in learn mode
+  const session = await prisma.whatsappSession.findFirst({ where: { sessionKey: 'main' } })
+  if (!session?.aiEnabled || session?.learnMode) {
+    console.log('[RE-ENGAGE] Skipping — AI is disabled or learn mode is on')
+    return
+  }
+
   const brands = await prisma.brand.findMany({ where: { isActive: true }, select: { id: true, name: true, reEngageDays: true, messageTemplates: true } })
 
   for (const brand of brands) {
