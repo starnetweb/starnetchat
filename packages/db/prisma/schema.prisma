@@ -60,7 +60,7 @@ model WhatsappSession {
   qrCode    String?       @db.Text
   // Global AI toggle — when false, AI is silenced system-wide; human CS handles everything
   aiEnabled Boolean       @default(true)
-  // AI model: "claude" = Anthropic claude-haiku-5-5 | "gpt" = OpenAI gpt-5-nano
+  // AI model: "claude" = Anthropic claude-haiku-5-5 | "gpt" = OpenAI gpt-6-luna
   aiModel   String        @default("claude")
   // Learn mode: when true, AI stays silent and human replies are stored as training examples
   learnMode Boolean       @default(false)
