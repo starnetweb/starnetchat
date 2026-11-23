@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { useAuthStore } from '@/lib/store'
-import { User, Lock, Bell, Shield, Save, Loader2, Bot, GraduationCap, BookOpen, CheckCircle2, Clock } from 'lucide-react'
+import { User, Lock, Bell, Shield, Save, Loader2, Bot, GraduationCap, BookOpen, CheckCircle2, Clock, Users } from 'lucide-react'
 import { api } from '@/lib/api'
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
@@ -24,6 +24,8 @@ export default function SettingsPage() {
   const [modelSaved, setModelSaved] = useState(false)
   const [learnMode, setLearnMode] = useState(false)
   const [learnSaving, setLearnSaving] = useState(false)
+  const [humanMode, setHumanMode] = useState(false)
+  const [humanSaving, setHumanSaving] = useState(false)
   const [schedule, setSchedule] = useState<AISchedule>(DEFAULT_SCHEDULE)
   const [scheduleSaving, setScheduleSaving] = useState(false)
   const [scheduleSaved, setScheduleSaved] = useState(false)
@@ -32,6 +34,7 @@ export default function SettingsPage() {
   useEffect(() => {
     api.get('/whatsapp/ai-model').then((d: any) => setAiModel(d.aiModel ?? 'claude')).catch(() => {})
     api.get('/whatsapp/learn-mode').then((d: any) => setLearnMode(d.learnMode ?? false)).catch(() => {})
+    api.get('/whatsapp/human-mode').then((d: any) => setHumanMode(d.humanMode ?? false)).catch(() => {})
     api.get('/whatsapp/ai-schedule').then((d: any) => { if (d.aiSchedule) setSchedule(d.aiSchedule) }).catch(() => {})
   }, [])
 
@@ -42,6 +45,16 @@ export default function SettingsPage() {
       setLearnMode(value)
     } finally {
       setLearnSaving(false)
+    }
+  }
+
+  async function handleHumanModeToggle(value: boolean) {
+    setHumanSaving(true)
+    try {
+      await api.post('/whatsapp/human-mode', { humanMode: value })
+      setHumanMode(value)
+    } finally {
+      setHumanSaving(false)
     }
   }
 
@@ -340,6 +353,58 @@ export default function SettingsPage() {
         <p className="text-xs text-gray-400 mt-4">
           Tip: Start in Learn mode, let your team handle chats for a few days, then switch to Active — the AI will reply in your team's tone.
         </p>
+      </div>
+
+      {/* Human Mode */}
+      <div className="card p-6">
+        <div className="flex items-center gap-3 mb-5">
+          <div className="w-8 h-8 bg-orange-100 rounded-lg flex items-center justify-center">
+            <Users size={16} className="text-orange-600" />
+          </div>
+          <div>
+            <h2 className="font-semibold text-gray-900 text-sm">Human Mode</h2>
+            <p className="text-xs text-gray-400">Hand all chats to your CS team — AI goes completely silent</p>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between p-4 rounded-xl border-2 border-gray-100 mb-4">
+          <div className="flex-1">
+            <div className={`text-sm font-semibold ${humanMode ? 'text-orange-700' : 'text-gray-700'}`}>
+              {humanMode ? 'Human Mode — Your team is handling everything' : 'AI is active (or in learn mode)'}
+            </div>
+            <div className="text-xs text-gray-400 mt-0.5">
+              {humanMode
+                ? 'AI stays completely silent. No learning, no replies. Only your team responds.'
+                : 'AI responds or learns based on the mode above.'}
+            </div>
+          </div>
+          <button
+            onClick={() => handleHumanModeToggle(!humanMode)}
+            disabled={humanSaving}
+            className={`relative inline-flex h-7 w-14 items-center rounded-full transition-colors ml-4 ${
+              humanMode ? 'bg-orange-600' : 'bg-gray-200'
+            }`}
+          >
+            <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${
+              humanMode ? 'translate-x-8' : 'translate-x-1'
+            }`} />
+          </button>
+        </div>
+
+        <div className="grid grid-cols-3 gap-3 text-xs">
+          <div className={`p-3 rounded-xl border ${!humanMode && !learnMode ? 'border-green-300 bg-green-50' : 'border-gray-100 bg-gray-50'}`}>
+            <div className="font-semibold text-gray-800 mb-1">AI Active</div>
+            <div className="text-gray-500">AI replies to customers automatically.</div>
+          </div>
+          <div className={`p-3 rounded-xl border ${!humanMode && learnMode ? 'border-indigo-300 bg-indigo-50' : 'border-gray-100 bg-gray-50'}`}>
+            <div className="font-semibold text-gray-800 mb-1">AI Learning</div>
+            <div className="text-gray-500">AI watches and learns. No auto-replies.</div>
+          </div>
+          <div className={`p-3 rounded-xl border ${humanMode ? 'border-orange-300 bg-orange-50' : 'border-gray-100 bg-gray-50'}`}>
+            <div className="font-semibold text-gray-800 mb-1">Human Only</div>
+            <div className="text-gray-500">AI fully silent. No replies, no learning.</div>
+          </div>
+        </div>
       </div>
 
       {/* AI Schedule */}

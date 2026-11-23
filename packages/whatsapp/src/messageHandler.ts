@@ -1,6 +1,6 @@
 import { proto } from '@whiskeysockets/baileys'
 import { prisma } from '@wac/db'
-import { generateAIResponse, detectBrand, analyzeSentiment, autoLabelConversation, generateReplySuggestion } from '@wac/ai'
+import { generateAIResponse, detectBrand, analyzeSentiment, autoLabelConversation, generateReplySuggestion, detectIntent } from '@wac/ai'
 import { scheduleAutomations } from '@wac/queue'
 import { EventEmitter } from 'events'
 
@@ -41,10 +41,11 @@ export async function handleIncomingMessage(sock: any, msg: proto.IWebMessageInf
     return
   }
 
-  // ── Global AI toggle check (checked later — message is always logged) ────
+  // ── Global mode flags ────────────────────────────────────────────────────
   const session = await prisma.whatsappSession.findFirst({ where: { sessionKey: 'main' } })
   const aiEnabled = session?.aiEnabled ?? true
   const learnMode = session?.learnMode ?? false
+  const humanMode = (session as any)?.humanMode ?? false
 
   // Upsert contact — look up by phone OR jid to handle both formats
   let contact = await prisma.contact.findFirst({
@@ -91,9 +92,9 @@ export async function handleIncomingMessage(sock: any, msg: proto.IWebMessageInf
       brandId = detection.brandId
       brandConfirmed = true
     } else {
-      // Only send fallback prompt if AI is enabled and not in learn mode
-      if (!aiEnabled || learnMode) {
-        console.log('[MSG] AI disabled — skipping brand detection fallback reply')
+      // Only send fallback prompt if AI is enabled and not in learn/human mode
+      if (!aiEnabled || learnMode || humanMode) {
+        console.log('[MSG] AI disabled/learn/human — skipping brand detection fallback reply')
         if (!conversation) {
           const anyBrand = await prisma.brand.findFirst({ where: { isActive: true } })
           conversation = await prisma.conversation.create({
@@ -161,6 +162,22 @@ export async function handleIncomingMessage(sock: any, msg: proto.IWebMessageInf
 
   emit('message:new', { conversationId: conversation.id, direction: 'INBOUND', content: text })
 
+  // ── Intent detection (background — updates conversation for AI context) ───
+  detectIntent(text).then(async (intent) => {
+    await prisma.conversation.update({
+      where: { id: conversation.id },
+      data: { detectedIntent: intent } as any,
+    })
+    emit('conversation:updated', { conversationId: conversation.id, detectedIntent: intent })
+    console.log(`[INTENT] Detected: "${intent}" for conversation ${conversation.id}`)
+  }).catch(() => {})
+
+  // ── Human mode: message logged + intent detected — stop here (no learning) ─
+  if (humanMode) {
+    console.log('[MSG] Human mode ON — AI silent, not learning')
+    return
+  }
+
   // ── CSAT detection: if we sent a CSAT survey and customer replies with 1-5 ──
   const convFull = await prisma.conversation.findUnique({ where: { id: conversation.id } })
   if (convFull?.csatSent && !convFull.csatScore) {
@@ -220,7 +237,7 @@ export async function handleIncomingMessage(sock: any, msg: proto.IWebMessageInf
     return kws.some((k) => textLower.includes(k))
   })
 
-  if (matched && !learnMode) {
+  if (matched && !learnMode && !humanMode) {
     console.log(`[QUICK-REPLY] Matched rule "${matched.name}" — skipping AI`)
     try { await sock.presenceSubscribe(jid) } catch {}
     for (const qrMsg of matched.messages) {
@@ -417,45 +434,80 @@ export async function handleHumanAgentReply(msg: proto.IWebMessageInfo) {
   console.log(`[HUMAN] CS reply captured for conversation ${conversation.id}: "${text.slice(0, 60)}"`)
   emit('message:new', { conversationId: conversation.id, direction: 'OUTBOUND', content: text })
 
-  // In learn mode: save pattern + ask AI to suggest a better reply for human review
+  // In learn mode (and NOT human mode): capture pattern + auto-learn improved version
   const learnSession = await prisma.whatsappSession.findFirst({ where: { sessionKey: 'main' } })
-  if (learnSession?.learnMode) {
+  const isLearnMode = learnSession?.learnMode ?? false
+  const isHumanMode = (learnSession as any)?.humanMode ?? false
+
+  if (isLearnMode && !isHumanMode) {
     const lastInbound = await prisma.message.findFirst({
       where: { conversationId: conversation.id, direction: 'INBOUND' },
       orderBy: { sentAt: 'desc' },
     })
     if (lastInbound) {
-      // Save as learned pattern (raw human reply)
-      const existing = await prisma.learnedPattern.findFirst({
+      // Save raw human reply as a learned pattern immediately
+      const existingPattern = await prisma.learnedPattern.findFirst({
         where: { brandId: conversation.brandId, userMessage: lastInbound.content, agentReply: text },
       })
-      if (existing) {
-        await prisma.learnedPattern.update({ where: { id: existing.id }, data: { frequency: existing.frequency + 1 } })
+      if (existingPattern) {
+        await prisma.learnedPattern.update({ where: { id: existingPattern.id }, data: { frequency: existingPattern.frequency + 1 } })
       } else {
         await prisma.learnedPattern.create({ data: { brandId: conversation.brandId, userMessage: lastInbound.content, agentReply: text } })
       }
-      console.log(`[LEARN] Saved pattern for brand ${conversation.brandId}`)
+      console.log(`[LEARN] Pattern saved for brand ${conversation.brandId}`)
 
-      // Ask AI to suggest a better reply — non-blocking, result stored for human review
-      generateAISuggestion(conversation.brandId, conversation.id, lastInbound.content, text).catch(() => {})
+      // Generate AI-improved version, auto-approve it, and also store for human review
+      autoLearnImprovedReply(conversation.brandId, conversation.id, lastInbound.content, text, (conversation as any).detectedIntent).catch(() => {})
     }
   }
 }
 
-async function generateAISuggestion(brandId: string, conversationId: string, userMessage: string, humanReply: string) {
+/**
+ * Generates an AI-improved version of the human reply, then:
+ * 1. Auto-approves it as a LearnedPattern (so the AI immediately gets better)
+ * 2. Saves a SuggestedReply record so humans can review/correct the auto-learning
+ */
+async function autoLearnImprovedReply(
+  brandId: string,
+  conversationId: string,
+  userMessage: string,
+  humanReply: string,
+  intent?: string,
+) {
   try {
     const brand = await prisma.brand.findUnique({ where: { id: brandId } })
     if (!brand) return
 
-    const aiSuggestion = await generateReplySuggestion(brand.name, userMessage, humanReply)
-    if (!aiSuggestion) return
+    const aiSuggestion = await generateReplySuggestion(brand.name, userMessage, humanReply, intent)
 
-    await prisma.suggestedReply.create({
-      data: { brandId, conversationId, userMessage, humanReply, aiSuggestion },
+    // Always save a SuggestedReply for the human review queue
+    const suggestion = await prisma.suggestedReply.create({
+      data: { brandId, conversationId, userMessage, humanReply, aiSuggestion: aiSuggestion ?? humanReply },
     })
-    console.log(`[LEARN] AI suggestion saved for conversation ${conversationId}`)
+
+    if (aiSuggestion) {
+      // Auto-approve: add the AI-improved version as a LearnedPattern right away
+      const existingImproved = await prisma.learnedPattern.findFirst({
+        where: { brandId, userMessage, agentReply: aiSuggestion },
+      })
+      if (existingImproved) {
+        await prisma.learnedPattern.update({ where: { id: existingImproved.id }, data: { frequency: existingImproved.frequency + 1 } })
+      } else {
+        await prisma.learnedPattern.create({ data: { brandId, userMessage, agentReply: aiSuggestion } })
+      }
+
+      // Mark the suggestion as auto-approved in the review queue
+      await prisma.suggestedReply.update({
+        where: { id: suggestion.id },
+        data: { status: 'approved' },
+      })
+
+      console.log(`[LEARN] Auto-approved improved reply for brand ${brandId} (intent: ${intent ?? 'unknown'})`)
+    } else {
+      console.log(`[LEARN] AI suggestion matched human reply — no improvement saved for conversation ${conversationId}`)
+    }
   } catch (err: any) {
-    console.error('[LEARN] Failed to generate AI suggestion:', err.message)
+    console.error('[LEARN] autoLearnImprovedReply failed:', err.message)
   }
 }
 

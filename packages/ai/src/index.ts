@@ -174,9 +174,13 @@ export async function generateAIResponse(
         .join('\n\n')
     : ''
 
+  const intentContext = (conversation as any)?.detectedIntent
+    ? `\n\nCUSTOMER INTENT: ${(conversation as any).detectedIntent} — tailor your reply to this specific need.`
+    : ''
+
   const systemPrompt = `${brand.systemPrompt}
 
-${knowledgeContext ? `KNOWLEDGE BASE:\n${knowledgeContext}` : ''}${labelContext}${learnedContext}
+${knowledgeContext ? `KNOWLEDGE BASE:\n${knowledgeContext}` : ''}${labelContext}${learnedContext}${intentContext}
 
 Detect the language the customer is writing in and reply in that same language (e.g. if they write in Yoruba, reply in Yoruba; Pidgin, reply in Pidgin). Override this only if the brand language is explicitly required.
 Keep responses concise and helpful. If you genuinely cannot answer, reply with exactly: [HANDOFF] followed by your message to the customer.
@@ -284,6 +288,24 @@ export async function deleteKnowledgeBase(brandId: string) {
   await prisma.knowledgeChunk.deleteMany({ where: { brandId } })
 }
 
+// ── Intent Detection ──────────────────────────────────────────────────────────
+// Classifies what the customer is trying to accomplish so the AI can tailor its reply.
+
+export async function detectIntent(text: string): Promise<string> {
+  try {
+    const response = await getAnthropicClient().messages.create({
+      model: 'claude-haiku-4-5',
+      max_tokens: 30,
+      system: `Classify the customer's intent in 2-4 words. Use lowercase, hyphenated phrases like:
+pricing-inquiry, order-status, complaint, refund-request, general-inquiry, product-info,
+technical-support, payment-issue, delivery-query, service-request, feedback, greeting.
+Reply with ONLY the intent phrase — no explanation.`,
+      messages: [{ role: 'user', content: text }],
+    })
+    return (response.content[0] as Anthropic.TextBlock).text.trim().toLowerCase().slice(0, 60)
+  } catch { return 'general-inquiry' }
+}
+
 // ── Reply Suggestion (Learn Mode) ─────────────────────────────────────────────
 // Given a customer message + human agent reply, generate a suggested improvement
 // to be reviewed by a human before being approved as a LearnedPattern.
@@ -292,10 +314,13 @@ export async function generateReplySuggestion(
   brandName: string,
   userMessage: string,
   humanReply: string,
+  intent?: string,
 ): Promise<string | null> {
   const anthropic = getAnthropicClient()
 
-  const prompt = `You are a customer service quality coach for "${brandName}".
+  const intentLine = intent ? `\nDetected customer intent: ${intent}` : ''
+
+  const prompt = `You are a customer service quality coach for "${brandName}".${intentLine}
 
 A customer sent this message:
 "${userMessage}"

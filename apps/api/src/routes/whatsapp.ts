@@ -32,7 +32,11 @@ waRouter.get('/qr', async (_req, res) => {
 // Global AI toggle
 waRouter.get('/ai-status', async (_req, res) => {
   const session = await prisma.whatsappSession.findFirst({ where: { sessionKey: 'main' } })
-  res.json({ aiEnabled: session?.aiEnabled ?? true })
+  res.json({
+    aiEnabled: session?.aiEnabled ?? true,
+    learnMode: session?.learnMode ?? false,
+    humanMode: (session as any)?.humanMode ?? false,
+  })
 })
 
 waRouter.post('/ai-toggle', async (_req, res) => {
@@ -83,6 +87,26 @@ waRouter.post('/learn-mode', async (req, res) => {
     data: { learnMode },
   })
   res.json({ learnMode: updated.learnMode })
+})
+
+// Human mode toggle — when ON, AI neither replies nor learns; human CS handles everything
+waRouter.get('/human-mode', async (_req, res) => {
+  const session = await prisma.whatsappSession.findFirst({ where: { sessionKey: 'main' } })
+  res.json({ humanMode: (session as any)?.humanMode ?? false })
+})
+
+waRouter.post('/human-mode', async (req, res) => {
+  const { humanMode } = req.body
+  if (typeof humanMode !== 'boolean') {
+    return res.status(400).json({ error: 'humanMode must be a boolean' })
+  }
+  const session = await prisma.whatsappSession.findFirst({ where: { sessionKey: 'main' } })
+  if (!session) return res.status(404).json({ error: 'Session not found' })
+  const updated = await prisma.whatsappSession.update({
+    where: { id: session.id },
+    data: { humanMode } as any,
+  })
+  res.json({ humanMode: (updated as any).humanMode })
 })
 
 // List learned patterns per brand

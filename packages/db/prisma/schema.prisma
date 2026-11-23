@@ -64,6 +64,8 @@ model WhatsappSession {
   aiModel   String        @default("claude")
   // Learn mode: when true, AI stays silent and human replies are stored as training examples
   learnMode Boolean       @default(false)
+  // Human mode: when true, a human CS agent is handling; AI neither replies nor learns
+  humanMode Boolean       @default(false)
   // AI Schedule: JSON config { enabled, timezone, slots:[{days,startTime,endTime}] }
   aiSchedule Json?
   createdAt DateTime      @default(now())
@@ -140,6 +142,9 @@ model Conversation {
 
   // AI management flag — false means AI will not respond to this conversation
   aiManaged   Boolean    @default(false)
+
+  // Last detected intent from the customer (e.g. "pricing inquiry", "complaint", "order status")
+  detectedIntent String?
 
   brand       Brand     @relation(fields: [brandId], references: [id])
   contact     Contact   @relation(fields: [contactId], references: [id])
