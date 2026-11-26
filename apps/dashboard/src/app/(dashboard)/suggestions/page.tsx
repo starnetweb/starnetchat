@@ -14,6 +14,7 @@ interface Suggestion {
   status: 'pending' | 'approved' | 'rejected'
   createdAt: string
   brand: { name: string; slug: string }
+  conversation?: { id: string; brandConfirmed: boolean }
 }
 
 interface Counts { pending: number; approved: number; rejected: number; total: number }
@@ -135,9 +136,15 @@ export default function SuggestionsPage() {
             <div key={item.id} className="card p-5 space-y-4">
               {/* Brand + date */}
               <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-green-100 text-green-700">
-                  {item.brand.name}
-                </span>
+                {item.conversation?.brandConfirmed === false ? (
+                  <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">
+                    Unassigned brand
+                  </span>
+                ) : (
+                  <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-green-100 text-green-700">
+                    {item.brand.name}
+                  </span>
+                )}
                 <span className="text-xs text-gray-400">{new Date(item.createdAt).toLocaleString()}</span>
               </div>
 

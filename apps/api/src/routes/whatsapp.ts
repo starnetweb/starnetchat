@@ -233,7 +233,7 @@ waRouter.get('/suggested-replies', async (req, res) => {
       skip,
       include: {
         brand: { select: { name: true, slug: true } },
-        conversation: { select: { id: true } },
+        conversation: { select: { id: true, brandConfirmed: true } },
       },
     }),
     prisma.suggestedReply.count({ where: status === 'all' ? {} : { status } }),

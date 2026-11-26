@@ -450,7 +450,7 @@ export async function handleHumanAgentReply(msg: proto.IWebMessageInfo) {
   const isLearnMode = learnSession?.learnMode ?? false
   const isHumanMode = (learnSession as any)?.humanMode ?? false
 
-  if (isLearnMode && !isHumanMode) {
+  if (isLearnMode && !isHumanMode && conversation.brandConfirmed) {
     const lastInbound = await prisma.message.findFirst({
       where: { conversationId: conversation.id, direction: 'INBOUND' },
       orderBy: { sentAt: 'desc' },
