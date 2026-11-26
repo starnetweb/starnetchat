@@ -18,6 +18,8 @@ interface Conversation {
   status: string
   updatedAt: string
   notes?: string
+  aiLabels?: string[]
+  sentiment?: string
   contact: { id: string; name?: string; phone: string }
   brand: { name: string; slug: string }
   messages: { content: string; direction: string }[]
@@ -233,7 +235,17 @@ export default function ChatsPage() {
                   {formatDistanceToNow(new Date(c.updatedAt), { addSuffix: true })}
                 </span>
               </div>
-              <div className="text-xs text-gray-500 mt-0.5">{c.brand.name}</div>
+              <div className="flex items-center gap-1.5 mt-0.5">
+                <span className="text-xs text-gray-500">{c.brand.name}</span>
+                {c.aiLabels?.includes('AI-replied') && (
+                  <span className="text-xs px-1.5 py-0.5 rounded-full bg-teal-50 text-teal-700 font-medium flex items-center gap-0.5 leading-none">
+                    <Bot size={9} /> AI
+                  </span>
+                )}
+                {c.sentiment === 'angry' && (
+                  <span className="text-xs px-1.5 py-0.5 rounded-full bg-red-50 text-red-600 font-medium leading-none">🔴</span>
+                )}
+              </div>
               <div className="text-xs text-gray-400 mt-1 truncate">{c.messages[0]?.content || 'No messages'}</div>
             </button>
           ))}
