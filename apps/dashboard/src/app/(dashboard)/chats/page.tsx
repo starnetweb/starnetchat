@@ -442,7 +442,15 @@ export default function ChatsPage() {
                       <p className="whitespace-pre-wrap px-4 py-2.5">{m.content}</p>
                     )}
                     <div className={`text-xs px-4 pb-2 flex items-center gap-1 ${m.direction === 'OUTBOUND' ? 'text-green-200 justify-end' : 'text-gray-400'}`}>
-                      {new Date(m.sentAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      {(() => {
+                        const d = new Date(m.sentAt)
+                        const today = new Date()
+                        const yesterday = new Date(today); yesterday.setDate(today.getDate() - 1)
+                        const isToday = d.toDateString() === today.toDateString()
+                        const isYesterday = d.toDateString() === yesterday.toDateString()
+                        const dateStr = isToday ? '' : isYesterday ? 'Yesterday, ' : d.toLocaleDateString([], { day: 'numeric', month: 'short' }) + ', '
+                        return dateStr + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                      })()}
                       {m.direction === 'OUTBOUND' && <CheckCheck size={11} />}
                     </div>
                   </div>
