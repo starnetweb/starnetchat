@@ -81,8 +81,19 @@ export async function handleIncomingMessage(sock: any, msg: proto.IWebMessageInf
   let brandConfirmed: boolean
 
   if (conversation?.brandConfirmed) {
-    brandId = conversation.brandId
-    brandConfirmed = true
+    // Re-check: if the customer explicitly mentions a different brand, switch
+    const history = conversation.messages.map((m) => `${m.role}: ${m.content}`)
+    const reDetect = await detectBrand(text, [])  // current message only — ignore history to catch explicit switches
+    if (reDetect?.confidence === 'high' && reDetect.brandId !== conversation.brandId) {
+      console.log(`[BRAND] Customer switched brand — closing old conversation, starting new one`)
+      await prisma.conversation.update({ where: { id: conversation.id }, data: { status: 'RESOLVED' } })
+      conversation = null as any
+      brandId = reDetect.brandId
+      brandConfirmed = true
+    } else {
+      brandId = conversation.brandId
+      brandConfirmed = true
+    }
   } else {
     const history = conversation?.messages.map((m) => `${m.role}: ${m.content}`) ?? []
     const detection = await detectBrand(text, history)
