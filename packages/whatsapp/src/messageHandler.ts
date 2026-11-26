@@ -497,23 +497,8 @@ async function autoLearnImprovedReply(
     })
 
     if (aiSuggestion) {
-      // Auto-approve: add the AI-improved version as a LearnedPattern right away
-      const existingImproved = await prisma.learnedPattern.findFirst({
-        where: { brandId, userMessage, agentReply: aiSuggestion },
-      })
-      if (existingImproved) {
-        await prisma.learnedPattern.update({ where: { id: existingImproved.id }, data: { frequency: existingImproved.frequency + 1 } })
-      } else {
-        await prisma.learnedPattern.create({ data: { brandId, userMessage, agentReply: aiSuggestion } })
-      }
-
-      // Mark the suggestion as auto-approved in the review queue
-      await prisma.suggestedReply.update({
-        where: { id: suggestion.id },
-        data: { status: 'approved' },
-      })
-
-      console.log(`[LEARN] Auto-approved improved reply for brand ${brandId} (intent: ${intent ?? 'unknown'})`)
+      // Leave as pending — a human must approve before it becomes a LearnedPattern
+      console.log(`[LEARN] Queued AI suggestion for human review (brand ${brandId}, intent: ${intent ?? 'unknown'})`)
     } else {
       console.log(`[LEARN] AI suggestion matched human reply — no improvement saved for conversation ${conversationId}`)
     }

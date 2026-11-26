@@ -48,6 +48,8 @@ export default function ChatsPage() {
   const [summaryLoading, setSummaryLoading] = useState(false)
   const [csatSending, setCsatSending] = useState(false)
   const [followUpState, setFollowUpState] = useState<{ loading: boolean; result: string | null }>({ loading: false, result: null })
+  const [showFollowUpPanel, setShowFollowUpPanel] = useState(false)
+  const [followUpPhone, setFollowUpPhone] = useState('')
   const [attachFile, setAttachFile] = useState<File | null>(null)
   const [attachPreview, setAttachPreview] = useState<string | null>(null)
   const [aiTyping, setAiTyping] = useState(false)
@@ -164,13 +166,22 @@ export default function ChatsPage() {
     }
   }
 
-  async function triggerFollowUp() {
-    if (!confirm('Send a follow-up message to all open conversations where the customer has not replied to our last message?')) return
+  async function triggerFollowUp(phone?: string) {
+    const target = phone?.trim() || ''
+    const msg = target
+      ? `Send a follow-up to ${target}?`
+      : 'Send a follow-up to ALL dropped chats?'
+    if (!confirm(msg)) return
     setFollowUpState({ loading: true, result: null })
     try {
-      const res = await api.post('/chats/trigger-followup', { hours: 1 })
-      setFollowUpState({ loading: false, result: `Sent ${res.sent} follow-ups (${res.skipped} skipped)` })
-      setTimeout(() => setFollowUpState({ loading: false, result: null }), 5000)
+      const body: any = { hours: 1 }
+      if (target) body.phone = target
+      const res = await api.post('/chats/trigger-followup', body)
+      const label = res.error ? res.error : `Sent ${res.sent} follow-up${res.sent !== 1 ? 's' : ''} (${res.skipped} skipped)`
+      setFollowUpState({ loading: false, result: label })
+      setShowFollowUpPanel(false)
+      setFollowUpPhone('')
+      setTimeout(() => setFollowUpState({ loading: false, result: null }), 6000)
     } catch (err: any) {
       setFollowUpState({ loading: false, result: 'Error: ' + err.message })
     }
@@ -205,14 +216,43 @@ export default function ChatsPage() {
             )}
           </div>
           <button
-            onClick={triggerFollowUp}
+            onClick={() => setShowFollowUpPanel(p => !p)}
             disabled={followUpState.loading}
             className="w-full flex items-center justify-center gap-1.5 text-xs font-medium py-1.5 px-3 rounded-lg border border-orange-200 bg-orange-50 text-orange-700 hover:bg-orange-100 transition disabled:opacity-50"
-            title="Send a follow-up to all open chats where customer hasn't replied"
           >
             <RefreshCw size={11} className={followUpState.loading ? 'animate-spin' : ''} />
             {followUpState.loading ? 'Sending...' : 'Follow Up Dropped Chats'}
           </button>
+
+          {showFollowUpPanel && !followUpState.loading && (
+            <div className="border border-orange-100 rounded-lg bg-orange-50 p-3 space-y-2">
+              <p className="text-xs text-orange-700 font-medium">Target</p>
+              <button
+                onClick={() => triggerFollowUp()}
+                className="w-full text-left text-xs px-2 py-1.5 rounded-md bg-white border border-orange-200 text-orange-800 hover:bg-orange-100 transition font-medium"
+              >
+                📢 All dropped chats
+              </button>
+              <div className="flex gap-1.5">
+                <input
+                  className="input text-xs flex-1 py-1"
+                  placeholder="Phone number e.g. 2347012345678"
+                  value={followUpPhone}
+                  onChange={e => setFollowUpPhone(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && followUpPhone.trim() && triggerFollowUp(followUpPhone)}
+                />
+                <button
+                  onClick={() => triggerFollowUp(followUpPhone)}
+                  disabled={!followUpPhone.trim()}
+                  className="text-xs px-2 py-1 rounded-md bg-orange-600 text-white hover:bg-orange-700 disabled:opacity-40 transition font-medium"
+                >
+                  Send
+                </button>
+              </div>
+              <p className="text-xs text-orange-500">Enter a number to follow up one person only</p>
+            </div>
+          )}
+
           {followUpState.result && (
             <p className="text-xs text-center text-orange-600">{followUpState.result}</p>
           )}

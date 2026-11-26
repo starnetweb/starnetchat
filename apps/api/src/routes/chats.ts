@@ -219,8 +219,17 @@ chatRouter.post('/trigger-followup', async (req, res) => {
   if (!sock) return res.status(503).json({ error: 'WhatsApp not connected' })
 
   const HOURS = req.body.hours ?? 3  // default: chats silent for 3+ hours
+  const phone: string | undefined = req.body.phone?.trim().replace(/\D/g, '') || undefined
   const cutoff = new Date(Date.now() - HOURS * 60 * 60 * 1000)
   const oldestAllowed = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) // last 30 days only
+
+  // If a specific phone number is given, find that contact first
+  let contactIdFilter: string | undefined
+  if (phone) {
+    const contact = await prisma.contact.findFirst({ where: { phone: { contains: phone } } })
+    if (!contact) return res.json({ sent: 0, skipped: 0, total: 0, error: `No contact found for ${phone}` })
+    contactIdFilter = contact.id
+  }
 
   const candidates = await prisma.conversation.findMany({
     where: {
@@ -228,6 +237,7 @@ chatRouter.post('/trigger-followup', async (req, res) => {
       openedAt: { gte: oldestAllowed },
       // Customer must have actually messaged before (lastCustomerMsgAt set) and gone silent
       lastCustomerMsgAt: { not: null, lte: cutoff },
+      ...(contactIdFilter ? { contactId: contactIdFilter } : {}),
     } as any,
     include: {
       contact: true,
