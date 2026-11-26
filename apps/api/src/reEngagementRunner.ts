@@ -11,10 +11,10 @@ async function runReEngagement() {
   const sock = getSocket()
   if (!sock) return
 
-  // Never send automated messages when AI is disabled or in learn mode
+  // Never send automated messages when AI is disabled, in learn mode, or human mode
   const session = await prisma.whatsappSession.findFirst({ where: { sessionKey: 'main' } })
-  if (!session?.aiEnabled || session?.learnMode) {
-    console.log('[RE-ENGAGE] Skipping — AI is disabled or learn mode is on')
+  if (!session?.aiEnabled || session?.learnMode || (session as any)?.humanMode) {
+    console.log('[RE-ENGAGE] Skipping — AI is disabled, learn mode is on, or human mode is active')
     return
   }
 
